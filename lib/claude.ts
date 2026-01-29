@@ -1,0 +1,93 @@
+import Anthropic from "@anthropic-ai/sdk";
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY!,
+});
+
+const MODEL = "claude-sonnet-4-20250514";
+
+const SYSTEM_PROMPT = `You analyze news articles to determine if they relate to antisemitism. Respond with valid JSON only, no other text.`;
+
+function buildUserPrompt(
+  title: string,
+  source: string,
+  rawContent: string | null
+): string {
+  return `Analyze this article and return a JSON response with this exact structure:
+{
+  "is_relevant": boolean,
+  "summary": string or null,
+  "category": string or null
+}
+
+RELEVANCE CRITERIA:
+An article is relevant if it substantively covers:
+- Antisemitic incidents, hate crimes, or discrimination
+- Policy, legislation, or government action addressing antisemitism
+- Organizational responses to antisemitism (ADL, universities, etc.)
+- Academic research or reports about antisemitism
+- Public discourse, controversies, or debates about antisemitism
+
+An article is NOT relevant if it:
+- Merely mentions Jewish people/culture without an antisemitism angle
+- Covers general Middle East news without antisemitism focus
+- Is historical content with no current news hook
+
+SUMMARY REQUIREMENTS (only if relevant):
+- 1-2 sentences maximum
+- Neutral, factual tone
+- Capture the key newsworthy element
+- No editorializing
+
+CATEGORY REQUIREMENTS (only if relevant):
+Assign exactly ONE category. Categories are mutually exclusive:
+1. "Campus & Academia" - University incidents, student activism, faculty issues, academic research
+2. "Government & Policy" - Legislation, political statements, government actions
+3. "Hate Crimes & Violence" - Physical attacks, vandalism, criminal incidents
+4. "Media & Public Discourse" - Coverage controversies, public figures' statements, social media
+5. "International" - Events outside the United States
+6. "Organizational Response" - ADL/AJC/etc. statements, reports, initiatives
+7. "Legal & Civil Rights" - Lawsuits, civil rights cases, discrimination claims
+8. "Other" - Use sparingly, only when no other category fits
+
+ARTICLE TO ANALYZE:
+Title: ${title}
+Source: ${source}
+Content: ${rawContent || "(no content available)"}`;
+}
+
+export interface AnalysisResult {
+  is_relevant: boolean;
+  summary: string | null;
+  category: string | null;
+}
+
+export async function analyzeArticle(
+  title: string,
+  source: string,
+  rawContent: string | null
+): Promise<{ result: AnalysisResult; model: string }> {
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 512,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: buildUserPrompt(title, source, rawContent),
+      },
+    ],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+
+  const parsed: AnalysisResult = JSON.parse(text);
+
+  if (!parsed.is_relevant) {
+    parsed.summary = null;
+    parsed.category = null;
+  }
+
+  return { result: parsed, model: MODEL };
+}

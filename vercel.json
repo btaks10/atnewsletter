@@ -8,6 +8,10 @@
   },
   "crons": [
     {
+      "path": "/api/process-articles",
+      "schedule": "*/30 5-9 * * *"
+    },
+    {
       "path": "/api/trigger-digest",
       "schedule": "0 10 * * *"
     }

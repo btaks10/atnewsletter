@@ -1,6 +1,11 @@
 {
   "buildCommand": "",
   "outputDirectory": "",
+  "functions": {
+    "api/*.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/trigger-digest",

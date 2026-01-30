@@ -98,7 +98,7 @@ const BATCH_SIZE = 10;
 export async function runAnalysis() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const MAX_ARTICLES = 40;
+  const MAX_ARTICLES = 20;
 
   const { data: articles, error: fetchError } = await supabase
     .from("articles")

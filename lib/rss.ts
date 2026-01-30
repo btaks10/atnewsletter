@@ -15,6 +15,7 @@ export interface IngestResult {
 }
 
 export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
+  const errors: string[] = [];
   try {
     const rss = await parser.parseURL(feed.url);
 
@@ -30,15 +31,19 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
       const url = item.link;
       if (!url) continue;
 
-      const { data: existing } = await supabase
+      const { data: existing, error: selectError } = await supabase
         .from("articles")
         .select("id")
         .eq("url", url)
         .maybeSingle();
 
+      if (selectError) {
+        errors.push(`Select error for ${url}: ${selectError.message}`);
+        continue;
+      }
       if (existing) continue;
 
-      const { error } = await supabase.from("articles").insert({
+      const { error: insertError } = await supabase.from("articles").insert({
         url,
         title: item.title || "Untitled",
         author: item.creator || item["dc:creator"] || null,
@@ -50,7 +55,9 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
           item.contentSnippet || item.content || item.summary || null,
       });
 
-      if (!error) {
+      if (insertError) {
+        errors.push(`Insert error: ${insertError.message}`);
+      } else {
         newCount++;
       }
     }
@@ -67,6 +74,7 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
       status: "success",
       articles_found: recentItems.length,
       articles_new: newCount,
+      ...(errors.length > 0 ? { error: errors.slice(0, 3).join("; ") } : {}),
     };
   } catch (err: any) {
     const errorMessage = err?.message || String(err);

@@ -21,6 +21,12 @@ interface AnalysisResult {
   category: string | null;
 }
 
+function truncate(text: string | null, maxChars: number): string {
+  if (!text) return "(no content available)";
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars) + "…";
+}
+
 function buildBatchPrompt(articles: ArticleInput[]): string {
   const articleBlocks = articles
     .map(
@@ -28,7 +34,7 @@ function buildBatchPrompt(articles: ArticleInput[]): string {
         `[ARTICLE ${i}]
 Title: ${a.title}
 Source: ${a.source}
-Content: ${a.raw_content || "(no content available)"}`
+Content: ${truncate(a.raw_content, 500)}`
     )
     .join("\n\n");
 
@@ -131,7 +137,10 @@ export async function runAnalysis() {
     throw new Error(`Failed to parse Claude response: ${text.slice(0, 200)}`);
   }
 
-  // Store results and mark articles as analyzed
+  // Build bulk inserts
+  const analysisRows: any[] = [];
+  const analyzedIds: string[] = [];
+
   for (const result of results) {
     const article = articles[result.index];
     if (!article) {
@@ -144,26 +153,38 @@ export async function runAnalysis() {
       result.category = null;
     }
 
-    try {
-      await supabase.from("article_analysis").insert({
-        article_id: article.id,
-        is_relevant: result.is_relevant,
-        summary: result.summary,
-        category: result.category,
-        model_used: MODEL,
-      });
+    analysisRows.push({
+      article_id: article.id,
+      is_relevant: result.is_relevant,
+      summary: result.summary,
+      category: result.category,
+      model_used: MODEL,
+    });
 
-      await supabase
-        .from("articles")
-        .update({ analyzed: true })
-        .eq("id", article.id);
+    analyzedIds.push(article.id);
 
-      if (result.is_relevant) relevant++;
-      else notRelevant++;
-    } catch (err: any) {
-      errors.push(
-        `DB error for "${article.title}": ${err?.message || String(err)}`
-      );
+    if (result.is_relevant) relevant++;
+    else notRelevant++;
+  }
+
+  // Batch insert analysis results
+  if (analysisRows.length > 0) {
+    const { error: insertErr } = await supabase
+      .from("article_analysis")
+      .insert(analysisRows);
+    if (insertErr) {
+      errors.push(`Batch insert error: ${insertErr.message}`);
+    }
+  }
+
+  // Batch mark articles as analyzed
+  if (analyzedIds.length > 0) {
+    const { error: updateErr } = await supabase
+      .from("articles")
+      .update({ analyzed: true })
+      .in("id", analyzedIds);
+    if (updateErr) {
+      errors.push(`Batch update error: ${updateErr.message}`);
     }
   }
 

@@ -98,20 +98,27 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
 }
 
 export async function runIngestion(feeds: FeedSource[]) {
-  const results: IngestResult[] = [];
+  // Fetch all feeds in parallel
+  const settled = await Promise.allSettled(feeds.map((f) => ingestFeed(f)));
+
   let totalFound = 0;
   let totalNew = 0;
   let sourcesFailed = 0;
   const errors: string[] = [];
 
-  for (const feed of feeds) {
-    const result = await ingestFeed(feed);
-    results.push(result);
-    totalFound += result.articles_found;
-    totalNew += result.articles_new;
-    if (result.status === "failure") {
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === "fulfilled") {
+      const result = outcome.value;
+      totalFound += result.articles_found;
+      totalNew += result.articles_new;
+      if (result.status === "failure") {
+        sourcesFailed++;
+        if (result.error) errors.push(`${feeds[i].name}: ${result.error}`);
+      }
+    } else {
       sourcesFailed++;
-      if (result.error) errors.push(`${feed.name}: ${result.error}`);
+      errors.push(`${feeds[i].name}: ${outcome.reason}`);
     }
   }
 

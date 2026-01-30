@@ -93,7 +93,7 @@ export async function analyzeArticle(
   return { result: parsed, model: MODEL };
 }
 
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 15;
 
 export async function runAnalysis() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

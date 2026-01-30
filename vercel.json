@@ -1,4 +1,6 @@
 {
+  "buildCommand": "",
+  "outputDirectory": "",
   "crons": [
     {
       "path": "/api/trigger-digest",

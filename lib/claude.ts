@@ -93,12 +93,12 @@ export async function analyzeArticle(
   return { result: parsed, model: MODEL };
 }
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 50;
 
 export async function runAnalysis() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const MAX_ARTICLES = 10;
+  const MAX_ARTICLES = 150;
 
   const { data: articles, error: fetchError } = await supabase
     .from("articles")

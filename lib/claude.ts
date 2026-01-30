@@ -98,7 +98,7 @@ const BATCH_SIZE = 5;
 export async function runAnalysis() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const MAX_ARTICLES = 10;
+  const MAX_ARTICLES = 100;
 
   const { data: articles, error: fetchError } = await supabase
     .from("articles")
@@ -118,15 +118,18 @@ export async function runAnalysis() {
       articles_relevant: 0,
       articles_not_relevant: 0,
       errors: [],
+      timing: {},
     };
   }
 
   let relevant = 0;
   let notRelevant = 0;
   const errors: string[] = [];
+  const batchTimings: string[] = [];
 
-  // Process in parallel batches
+  // Process sequentially to avoid rate limits
   for (let i = 0; i < articles.length; i += BATCH_SIZE) {
+    const batchStart = Date.now();
     const batch = articles.slice(i, i + BATCH_SIZE);
 
     const results = await Promise.allSettled(
@@ -155,11 +158,13 @@ export async function runAnalysis() {
         } catch (err: any) {
           const msg = `Article "${article.title}": ${err?.message || String(err)}`;
           errors.push(msg);
-          // Don't mark as analyzed on failure — retry on next run
           return null;
         }
       })
     );
+
+    const batchMs = Date.now() - batchStart;
+    batchTimings.push(`batch${Math.floor(i / BATCH_SIZE)}:${batchMs}ms`);
 
     for (const r of results) {
       if (r.status === "fulfilled" && r.value !== null) {
@@ -175,5 +180,6 @@ export async function runAnalysis() {
     articles_relevant: relevant,
     articles_not_relevant: notRelevant,
     errors,
+    timing: batchTimings,
   };
 }

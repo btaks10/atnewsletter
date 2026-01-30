@@ -6,7 +6,7 @@ const parser = new Parser({
   timeout: 10000,
 });
 
-interface IngestResult {
+export interface IngestResult {
   source: string;
   status: "success" | "failure";
   articles_found: number;
@@ -87,4 +87,32 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
       error: errorMessage,
     };
   }
+}
+
+export async function runIngestion(feeds: FeedSource[]) {
+  const results: IngestResult[] = [];
+  let totalFound = 0;
+  let totalNew = 0;
+  let sourcesFailed = 0;
+  const errors: string[] = [];
+
+  for (const feed of feeds) {
+    const result = await ingestFeed(feed);
+    results.push(result);
+    totalFound += result.articles_found;
+    totalNew += result.articles_new;
+    if (result.status === "failure") {
+      sourcesFailed++;
+      if (result.error) errors.push(`${feed.name}: ${result.error}`);
+    }
+  }
+
+  return {
+    success: true,
+    sources_processed: feeds.length,
+    sources_failed: sourcesFailed,
+    total_articles_found: totalFound,
+    new_articles_inserted: totalNew,
+    errors,
+  };
 }

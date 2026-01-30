@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { supabase } from "./supabase";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -90,4 +91,91 @@ export async function analyzeArticle(
   }
 
   return { result: parsed, model: MODEL };
+}
+
+const BATCH_SIZE = 5;
+
+export async function runAnalysis() {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: articles, error: fetchError } = await supabase
+    .from("articles")
+    .select("*")
+    .eq("analyzed", false)
+    .gte("fetched_at", cutoff);
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  if (!articles || articles.length === 0) {
+    return {
+      success: true,
+      articles_processed: 0,
+      articles_relevant: 0,
+      articles_not_relevant: 0,
+      errors: [],
+    };
+  }
+
+  let relevant = 0;
+  let notRelevant = 0;
+  const errors: string[] = [];
+
+  // Process in parallel batches
+  for (let i = 0; i < articles.length; i += BATCH_SIZE) {
+    const batch = articles.slice(i, i + BATCH_SIZE);
+
+    const results = await Promise.allSettled(
+      batch.map(async (article) => {
+        try {
+          const { result, model } = await analyzeArticle(
+            article.title,
+            article.source,
+            article.raw_content
+          );
+
+          await supabase.from("article_analysis").insert({
+            article_id: article.id,
+            is_relevant: result.is_relevant,
+            summary: result.summary,
+            category: result.category,
+            model_used: model,
+          });
+
+          await supabase
+            .from("articles")
+            .update({ analyzed: true })
+            .eq("id", article.id);
+
+          return result.is_relevant;
+        } catch (err: any) {
+          const msg = `Article "${article.title}": ${err?.message || String(err)}`;
+          errors.push(msg);
+
+          await supabase
+            .from("articles")
+            .update({ analyzed: true })
+            .eq("id", article.id);
+
+          return null;
+        }
+      })
+    );
+
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value !== null) {
+        if (r.value) relevant++;
+        else notRelevant++;
+      }
+    }
+  }
+
+  return {
+    success: true,
+    articles_processed: articles.length,
+    articles_relevant: relevant,
+    articles_not_relevant: notRelevant,
+    errors,
+  };
 }

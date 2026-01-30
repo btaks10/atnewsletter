@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { CATEGORY_ORDER } from "./config";
+import { supabase } from "./supabase";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
 
@@ -177,4 +178,51 @@ export async function sendDigest(articles: DigestArticle[]) {
       : 0,
     resend_message_id: data?.id || null,
   };
+}
+
+export async function runDigest() {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error: fetchError } = await supabase
+    .from("article_analysis")
+    .select(
+      `
+      summary,
+      category,
+      articles!inner (
+        title,
+        url,
+        source,
+        author,
+        published_at
+      )
+    `
+    )
+    .eq("is_relevant", true)
+    .gte("analyzed_at", cutoff);
+
+  if (fetchError) {
+    throw new Error(fetchError.message);
+  }
+
+  const articles = (data || []).map((row: any) => ({
+    title: row.articles.title,
+    url: row.articles.url,
+    source: row.articles.source,
+    author: row.articles.author,
+    published_at: row.articles.published_at,
+    summary: row.summary,
+    category: row.category,
+  }));
+
+  const result = await sendDigest(articles);
+
+  await supabase.from("digest_logs").insert({
+    recipient: result.recipient,
+    articles_included: result.articles_included,
+    resend_message_id: result.resend_message_id,
+    status: "success",
+  });
+
+  return result;
 }

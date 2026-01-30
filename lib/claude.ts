@@ -100,7 +100,7 @@ export async function runAnalysis() {
   // Send ALL articles in a single Claude API call
   const response = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 8192,
+    max_tokens: 16384,
     system:
       "You analyze news articles to determine if they relate to antisemitism. Respond with valid JSON only, no other text.",
     messages: [
@@ -118,8 +118,11 @@ export async function runAnalysis() {
     ],
   });
 
-  const text =
+  let text =
     response.content[0].type === "text" ? response.content[0].text : "[]";
+
+  // Strip markdown code fences if present
+  text = text.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
 
   let results: AnalysisResult[];
   try {

@@ -7,15 +7,36 @@ const anthropic = new Anthropic({
 
 const MODEL = "claude-sonnet-4-20250514";
 
-const SYSTEM_PROMPT = `You analyze news articles to determine if they relate to antisemitism. Respond with valid JSON only, no other text.`;
+interface ArticleInput {
+  id: string;
+  title: string;
+  source: string;
+  raw_content: string | null;
+}
 
-function buildUserPrompt(
-  title: string,
-  source: string,
-  rawContent: string | null
-): string {
-  return `Analyze this article and return a JSON response with this exact structure:
+interface AnalysisResult {
+  index: number;
+  is_relevant: boolean;
+  summary: string | null;
+  category: string | null;
+}
+
+function buildBatchPrompt(articles: ArticleInput[]): string {
+  const articleBlocks = articles
+    .map(
+      (a, i) =>
+        `[ARTICLE ${i}]
+Title: ${a.title}
+Source: ${a.source}
+Content: ${a.raw_content || "(no content available)"}`
+    )
+    .join("\n\n");
+
+  return `Analyze each article below and determine if it relates to antisemitism.
+
+Return a JSON array with one object per article, in order. Each object must have:
 {
+  "index": number,
   "is_relevant": boolean,
   "summary": string or null,
   "category": string or null
@@ -34,78 +55,29 @@ An article is NOT relevant if it:
 - Covers general Middle East news without antisemitism focus
 - Is historical content with no current news hook
 
-SUMMARY REQUIREMENTS (only if relevant):
-- 1-2 sentences maximum
-- Neutral, factual tone
-- Capture the key newsworthy element
-- No editorializing
+For NOT relevant articles: set summary and category to null.
 
-CATEGORY REQUIREMENTS (only if relevant):
-Assign exactly ONE category. Categories are mutually exclusive:
-1. "Campus & Academia" - University incidents, student activism, faculty issues, academic research
-2. "Government & Policy" - Legislation, political statements, government actions
-3. "Hate Crimes & Violence" - Physical attacks, vandalism, criminal incidents
-4. "Media & Public Discourse" - Coverage controversies, public figures' statements, social media
-5. "International" - Events outside the United States
-6. "Organizational Response" - ADL/AJC/etc. statements, reports, initiatives
-7. "Legal & Civil Rights" - Lawsuits, civil rights cases, discrimination claims
-8. "Other" - Use sparingly, only when no other category fits
+For relevant articles:
+- summary: 1-2 sentences, neutral factual tone, key newsworthy element
+- category: exactly ONE of:
+  "Campus & Academia", "Government & Policy", "Hate Crimes & Violence",
+  "Media & Public Discourse", "International", "Organizational Response",
+  "Legal & Civil Rights", "Other"
 
-ARTICLE TO ANALYZE:
-Title: ${title}
-Source: ${source}
-Content: ${rawContent || "(no content available)"}`;
+Return ONLY the JSON array, no other text.
+
+${articleBlocks}`;
 }
-
-export interface AnalysisResult {
-  is_relevant: boolean;
-  summary: string | null;
-  category: string | null;
-}
-
-export async function analyzeArticle(
-  title: string,
-  source: string,
-  rawContent: string | null
-): Promise<{ result: AnalysisResult; model: string }> {
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 512,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: buildUserPrompt(title, source, rawContent),
-      },
-    ],
-  });
-
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
-
-  const parsed: AnalysisResult = JSON.parse(text);
-
-  if (!parsed.is_relevant) {
-    parsed.summary = null;
-    parsed.category = null;
-  }
-
-  return { result: parsed, model: MODEL };
-}
-
-const BATCH_SIZE = 5;
 
 export async function runAnalysis() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-  const MAX_ARTICLES = 5;
 
   const { data: articles, error: fetchError } = await supabase
     .from("articles")
     .select("*")
     .eq("analyzed", false)
     .gte("fetched_at", cutoff)
-    .limit(MAX_ARTICLES);
+    .limit(150);
 
   if (fetchError) {
     throw new Error(fetchError.message);
@@ -118,59 +90,77 @@ export async function runAnalysis() {
       articles_relevant: 0,
       articles_not_relevant: 0,
       errors: [],
-      timing: {},
     };
   }
 
+  const errors: string[] = [];
   let relevant = 0;
   let notRelevant = 0;
-  const errors: string[] = [];
-  const batchTimings: string[] = [];
 
-  // Process sequentially to avoid rate limits
-  for (let i = 0; i < articles.length; i += BATCH_SIZE) {
-    const batchStart = Date.now();
-    const batch = articles.slice(i, i + BATCH_SIZE);
+  // Send ALL articles in a single Claude API call
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 8192,
+    system:
+      "You analyze news articles to determine if they relate to antisemitism. Respond with valid JSON only, no other text.",
+    messages: [
+      {
+        role: "user",
+        content: buildBatchPrompt(
+          articles.map((a) => ({
+            id: a.id,
+            title: a.title,
+            source: a.source,
+            raw_content: a.raw_content,
+          }))
+        ),
+      },
+    ],
+  });
 
-    const results = await Promise.allSettled(
-      batch.map(async (article) => {
-        try {
-          const { result, model } = await analyzeArticle(
-            article.title,
-            article.source,
-            article.raw_content
-          );
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "[]";
 
-          await supabase.from("article_analysis").insert({
-            article_id: article.id,
-            is_relevant: result.is_relevant,
-            summary: result.summary,
-            category: result.category,
-            model_used: model,
-          });
+  let results: AnalysisResult[];
+  try {
+    results = JSON.parse(text);
+  } catch {
+    throw new Error(`Failed to parse Claude response: ${text.slice(0, 200)}`);
+  }
 
-          await supabase
-            .from("articles")
-            .update({ analyzed: true })
-            .eq("id", article.id);
+  // Store results and mark articles as analyzed
+  for (const result of results) {
+    const article = articles[result.index];
+    if (!article) {
+      errors.push(`Invalid index ${result.index} in Claude response`);
+      continue;
+    }
 
-          return result.is_relevant;
-        } catch (err: any) {
-          const msg = `Article "${article.title}": ${err?.message || String(err)}`;
-          errors.push(msg);
-          return null;
-        }
-      })
-    );
+    if (!result.is_relevant) {
+      result.summary = null;
+      result.category = null;
+    }
 
-    const batchMs = Date.now() - batchStart;
-    batchTimings.push(`batch${Math.floor(i / BATCH_SIZE)}:${batchMs}ms`);
+    try {
+      await supabase.from("article_analysis").insert({
+        article_id: article.id,
+        is_relevant: result.is_relevant,
+        summary: result.summary,
+        category: result.category,
+        model_used: MODEL,
+      });
 
-    for (const r of results) {
-      if (r.status === "fulfilled" && r.value !== null) {
-        if (r.value) relevant++;
-        else notRelevant++;
-      }
+      await supabase
+        .from("articles")
+        .update({ analyzed: true })
+        .eq("id", article.id);
+
+      if (result.is_relevant) relevant++;
+      else notRelevant++;
+    } catch (err: any) {
+      errors.push(
+        `DB error for "${article.title}": ${err?.message || String(err)}`
+      );
     }
   }
 
@@ -180,6 +170,5 @@ export async function runAnalysis() {
     articles_relevant: relevant,
     articles_not_relevant: notRelevant,
     errors,
-    timing: batchTimings,
   };
 }

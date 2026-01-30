@@ -155,12 +155,7 @@ export async function runAnalysis() {
         } catch (err: any) {
           const msg = `Article "${article.title}": ${err?.message || String(err)}`;
           errors.push(msg);
-
-          await supabase
-            .from("articles")
-            .update({ analyzed: true })
-            .eq("id", article.id);
-
+          // Don't mark as analyzed on failure — retry on next run
           return null;
         }
       })

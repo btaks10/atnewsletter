@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RSS_FEEDS } from "@/lib/config";
+import { getActiveFeeds } from "@/lib/config";
 import { runIngestion } from "@/lib/rss";
 import { runAnalysis } from "@/lib/claude";
 import { runClustering } from "@/lib/story-clustering";
@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
   const start = Date.now();
 
   try {
-    const ingest = await runIngestion(RSS_FEEDS);
+    const feeds = await getActiveFeeds();
+    const ingest = await runIngestion(feeds);
 
     let analyze;
     let analysisRuns = 0;

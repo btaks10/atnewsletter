@@ -212,7 +212,7 @@ export async function runAnalysis() {
   try {
     filterResults = new Map();
     for (const article of articles) {
-      const result = filterArticleByKeywords({
+      const result = await filterArticleByKeywords({
         title: article.title,
         raw_content: article.raw_content,
       });

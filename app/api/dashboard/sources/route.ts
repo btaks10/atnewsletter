@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { RSS_FEEDS } from "@/lib/config";
 
 export async function GET() {
   const sevenDaysAgo = new Date(
     Date.now() - 7 * 24 * 60 * 60 * 1000
   ).toISOString();
 
-  // RSS feeds: config + recent ingest_logs
+  // RSS feeds from database
+  const { data: dbFeeds } = await supabase
+    .from("rss_feeds")
+    .select("id, name, url, type, is_active")
+    .order("name");
+
+  // Recent ingest logs for status
   const { data: recentLogs } = await supabase
     .from("ingest_logs")
     .select("source, status, articles_found, articles_new, created_at")
@@ -37,10 +42,12 @@ export async function GET() {
     logsBySource[log.source].totalNew += log.articles_new;
   }
 
-  const rssSources = RSS_FEEDS.map((feed) => ({
+  const rssSources = (dbFeeds || []).map((feed) => ({
+    id: feed.id,
     name: feed.name,
     type: feed.type,
     url: feed.url,
+    is_active: feed.is_active,
     status: logsBySource[feed.name]?.latestStatus || "unknown",
     last_run: logsBySource[feed.name]?.latestRun || null,
     articles_7d: logsBySource[feed.name]?.totalArticles || 0,
@@ -55,8 +62,16 @@ export async function GET() {
     )
     .order("priority", { ascending: false });
 
+  // Keywords
+  const { data: keywords } = await supabase
+    .from("keyword_config")
+    .select("id, keyword, tier, is_active")
+    .order("tier")
+    .order("keyword");
+
   return NextResponse.json({
     rss_feeds: rssSources,
     gnews_queries: gnewsQueries || [],
+    keywords: keywords || [],
   });
 }

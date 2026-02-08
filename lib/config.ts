@@ -92,3 +92,26 @@ export function getArticleAgeCutoff(): string {
   const hours = parseInt(process.env.MAX_ARTICLE_AGE_HOURS || "24", 10);
   return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
+
+/**
+ * Fetch active RSS feeds from the database, falling back to hardcoded config.
+ */
+export async function getActiveFeeds(): Promise<FeedSource[]> {
+  try {
+    const { supabase } = await import("./supabase");
+    const { data, error } = await supabase
+      .from("rss_feeds")
+      .select("name, url, type")
+      .eq("is_active", true);
+
+    if (error || !data || data.length === 0) {
+      console.log("DB feeds unavailable, using hardcoded fallback");
+      return RSS_FEEDS;
+    }
+
+    return data as FeedSource[];
+  } catch {
+    console.log("DB feeds fetch failed, using hardcoded fallback");
+    return RSS_FEEDS;
+  }
+}

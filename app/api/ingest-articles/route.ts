@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { RSS_FEEDS } from "@/lib/config";
+import { getActiveFeeds } from "@/lib/config";
 import { runIngestion } from "@/lib/rss";
 
 export async function POST() {
   try {
-    const result = await runIngestion(RSS_FEEDS);
+    const feeds = await getActiveFeeds();
+    const result = await runIngestion(feeds);
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json(

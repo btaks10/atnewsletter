@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RSS_FEEDS } from "@/lib/config";
+import { getActiveFeeds } from "@/lib/config";
 import { runIngestion } from "@/lib/rss";
 import { runGNewsIngestion } from "@/lib/gnews";
 import { runAnalysis } from "@/lib/claude";
@@ -27,8 +27,9 @@ export async function POST(request: NextRequest) {
 
   try {
     // Step 1: Ingest from RSS and GNews in parallel
+    const feeds = await getActiveFeeds();
     const [rssResult, gnewsResult] = await Promise.allSettled([
-      runIngestion(RSS_FEEDS),
+      runIngestion(feeds),
       runGNewsIngestion(),
     ]);
 

@@ -143,22 +143,13 @@ export async function filterArticleByKeywords(
   const secondaryMatches = findMatchingKeywords(searchText, secondary);
   const contextMatches = findMatchingKeywords(searchText, context);
 
-  // Medium confidence: 2+ secondary matches, or 1 secondary + 1 context
-  if (secondaryMatches.length >= 2) {
+  // Medium confidence: 1+ secondary match (with or without context)
+  if (secondaryMatches.length >= 1) {
     return {
       passFilter: true,
       matchedKeywords: [...secondaryMatches, ...contextMatches],
       confidence: "medium",
-      reason: `Multiple secondary keyword matches: ${secondaryMatches.join(", ")}`,
-    };
-  }
-
-  if (secondaryMatches.length >= 1 && contextMatches.length >= 1) {
-    return {
-      passFilter: true,
-      matchedKeywords: [...secondaryMatches, ...contextMatches],
-      confidence: "medium",
-      reason: `Secondary + context match: ${secondaryMatches.join(", ")} + ${contextMatches.join(", ")}`,
+      reason: `Secondary keyword match: ${secondaryMatches.join(", ")}${contextMatches.length ? ` + context: ${contextMatches.join(", ")}` : ""}`,
     };
   }
 

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { RSS_FEEDS } from "../lib/config";
 import { runIngestion } from "../lib/rss";
 import { runAnalysis } from "../lib/claude";
+import { runClustering } from "../lib/story-clustering";
 
 export const config = { maxDuration: 60 };
 
@@ -25,10 +26,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ingest = await runIngestion(RSS_FEEDS);
     const analyze = await runAnalysis();
 
+    let clustering;
+    try {
+      clustering = await runClustering();
+    } catch (err: any) {
+      console.error(`Clustering failed, continuing without: ${err?.message}`);
+      clustering = { skipped: true, reason: `Error: ${err?.message}` };
+    }
+
     return res.status(200).json({
       success: true,
       ingest,
       analyze,
+      clustering,
       duration_ms: Date.now() - start,
     });
   } catch (err: any) {

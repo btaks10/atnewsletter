@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { RSS_FEEDS } from "../lib/config";
 import { runIngestion } from "../lib/rss";
 import { runAnalysis } from "../lib/claude";
+import { runClustering } from "../lib/story-clustering";
 import { runDigest } from "../lib/email";
 
 export const config = { maxDuration: 60 };
@@ -32,13 +33,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Step 2: Analyze with Claude
     const analyze = await runAnalysis();
 
-    // Step 3: Send email digest
+    // Step 3: Cluster related stories
+    let clustering;
+    try {
+      clustering = await runClustering();
+    } catch (err: any) {
+      console.error(`Clustering failed, continuing without: ${err?.message}`);
+      clustering = { skipped: true, reason: `Error: ${err?.message}` };
+    }
+
+    // Step 4: Send email digest
     const email = await runDigest();
 
     return res.status(200).json({
       success: true,
       ingest,
       analyze,
+      clustering,
       email,
       total_duration_ms: Date.now() - startTotal,
     });

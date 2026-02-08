@@ -38,6 +38,19 @@ create index idx_article_analysis_analyzed_at on article_analysis (analyzed_at);
 alter table articles add column if not exists keyword_passed boolean;
 alter table articles add column if not exists keyword_matches jsonb;
 
+-- Story clusters table: groups articles covering the same story
+create table story_clusters (
+  id serial primary key,
+  cluster_headline text,
+  article_count integer,
+  category text,
+  created_at timestamptz default now()
+);
+
+-- Clustering columns on article_analysis
+alter table article_analysis add column if not exists cluster_id integer references story_clusters(id);
+alter table article_analysis add column if not exists is_primary_in_cluster boolean default true;
+
 -- Ingest logs table: tracks RSS feed processing results
 create table ingest_logs (
   id uuid primary key default uuid_generate_v4(),

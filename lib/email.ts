@@ -12,6 +12,7 @@ interface DigestArticle {
   published_at: string;
   summary: string;
   category: string;
+  relatedArticles?: { source: string; url: string }[];
 }
 
 function formatDate(dateStr: string): string {
@@ -78,11 +79,15 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
 
     for (const article of catArticles) {
       const authorPart = article.author ? ` &bull; ${article.author}` : "";
+      const alsoCoveredBy =
+        article.relatedArticles && article.relatedArticles.length > 0
+          ? `\n      <div class="source-info" style="margin-top: 4px;">Also covered by: ${article.relatedArticles.map((r) => `<a href="${r.url}" style="color: #888; text-decoration: underline;">${escapeHtml(r.source)}</a>`).join(", ")}</div>`
+          : "";
       html += `
     <div class="article">
       <a href="${article.url}">${escapeHtml(article.title)}</a>
       <div class="source-info">${escapeHtml(article.source)}${authorPart} &bull; ${formatDate(article.published_at)}</div>
-      <p class="summary">${escapeHtml(article.summary)}</p>
+      <p class="summary">${escapeHtml(article.summary)}</p>${alsoCoveredBy}
     </div>`;
     }
 
@@ -189,6 +194,8 @@ export async function runDigest() {
       `
       summary,
       category,
+      cluster_id,
+      is_primary_in_cluster,
       articles!inner (
         title,
         url,
@@ -205,15 +212,73 @@ export async function runDigest() {
     throw new Error(fetchError.message);
   }
 
-  const articles = (data || []).map((row: any) => ({
-    title: row.articles.title,
-    url: row.articles.url,
-    source: row.articles.source,
-    author: row.articles.author,
-    published_at: row.articles.published_at,
-    summary: row.summary,
-    category: row.category,
-  }));
+  const rows = data || [];
+
+  // Group by cluster_id to merge clustered articles
+  const clusterMap = new Map<number, any[]>();
+  const unclustered: any[] = [];
+
+  for (const row of rows) {
+    if (row.cluster_id) {
+      if (!clusterMap.has(row.cluster_id)) {
+        clusterMap.set(row.cluster_id, []);
+      }
+      clusterMap.get(row.cluster_id)!.push(row);
+    } else {
+      unclustered.push(row);
+    }
+  }
+
+  const articles: DigestArticle[] = [];
+
+  // Process unclustered articles (render as individual items)
+  for (const row of unclustered) {
+    articles.push({
+      title: row.articles.title,
+      url: row.articles.url,
+      source: row.articles.source,
+      author: row.articles.author,
+      published_at: row.articles.published_at,
+      summary: row.summary,
+      category: row.category,
+    });
+  }
+
+  // Process clustered articles (merge into primary with "Also covered by")
+  for (const [, clusterRows] of clusterMap) {
+    const primary = clusterRows.find((r: any) => r.is_primary_in_cluster);
+    const related = clusterRows.filter((r: any) => !r.is_primary_in_cluster);
+
+    if (!primary) {
+      // Fallback: if no primary found, render all individually
+      for (const row of clusterRows) {
+        articles.push({
+          title: row.articles.title,
+          url: row.articles.url,
+          source: row.articles.source,
+          author: row.articles.author,
+          published_at: row.articles.published_at,
+          summary: row.summary,
+          category: row.category,
+        });
+      }
+      continue;
+    }
+
+    articles.push({
+      title: primary.articles.title,
+      url: primary.articles.url,
+      source: primary.articles.source,
+      author: primary.articles.author,
+      published_at: primary.articles.published_at,
+      summary: primary.summary,
+      category: primary.category,
+      relatedArticles: related.map((r: any) => ({
+        source: r.articles.source,
+        url: r.articles.url,
+      })),
+    });
+  }
 
   const result = await sendDigest(articles);
 

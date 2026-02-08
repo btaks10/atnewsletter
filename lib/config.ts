@@ -24,3 +24,8 @@ export const CATEGORY_ORDER = [
 ] as const;
 
 export type Category = (typeof CATEGORY_ORDER)[number];
+
+export function getArticleAgeCutoff(): string {
+  const hours = parseInt(process.env.MAX_ARTICLE_AGE_HOURS || "24", 10);
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}

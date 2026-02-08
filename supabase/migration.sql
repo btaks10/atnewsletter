@@ -72,3 +72,17 @@ create table digest_logs (
   error_message text,
   created_at timestamptz not null default now()
 );
+
+-- Pipeline stats table: tracks full pipeline run metrics
+create table pipeline_stats (
+  id serial primary key,
+  run_date date,
+  articles_ingested integer,
+  articles_keyword_passed integer,
+  articles_analyzed integer,
+  articles_relevant integer,
+  clusters_formed integer,
+  email_sent boolean,
+  total_duration_ms integer,
+  created_at timestamptz default now()
+);

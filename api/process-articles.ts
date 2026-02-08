@@ -24,7 +24,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const ingest = await runIngestion(RSS_FEEDS);
-    const analyze = await runAnalysis();
+
+    let analyze;
+    let analysisRuns = 0;
+    let allProcessed = false;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      analyze = await runAnalysis();
+      analysisRuns++;
+      if (analyze.remaining_unanalyzed === 0) {
+        allProcessed = true;
+        break;
+      }
+    }
 
     let clustering;
     try {
@@ -38,6 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       ingest,
       analyze,
+      analysis_runs: analysisRuns,
+      all_articles_processed: allProcessed,
       clustering,
       duration_ms: Date.now() - start,
     });

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "./supabase";
+import { getArticleAgeCutoff } from "./config";
 import { filterArticleByKeywords, FilterResult } from "./keyword-filter";
 
 const anthropic = new Anthropic({
@@ -7,6 +8,8 @@ const anthropic = new Anthropic({
 });
 
 const MODEL = "claude-sonnet-4-20250514";
+const BATCH_SIZE = 20;
+const ANALYSIS_TIMEOUT_MS = 50_000; // Stop before Vercel's 60s limit
 
 interface ArticleInput {
   id: string;
@@ -76,15 +79,104 @@ Return ONLY the JSON array, no other text.
 ${articleBlocks}`;
 }
 
+async function analyzeBatch(
+  batchArticles: any[],
+  errors: string[]
+): Promise<{ relevant: number; notRelevant: number }> {
+  let relevant = 0;
+  let notRelevant = 0;
+
+  const response = await anthropic.messages.create({
+    model: MODEL,
+    max_tokens: 16384,
+    system:
+      "You analyze news articles to determine if they relate to antisemitism. Respond with valid JSON only, no other text.",
+    messages: [
+      {
+        role: "user",
+        content: buildBatchPrompt(
+          batchArticles.map((a) => ({
+            id: a.id,
+            title: a.title,
+            source: a.source,
+            raw_content: a.raw_content,
+          }))
+        ),
+      },
+    ],
+  });
+
+  let text =
+    response.content[0].type === "text" ? response.content[0].text : "[]";
+  text = text.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
+
+  let results: AnalysisResult[];
+  try {
+    results = JSON.parse(text);
+  } catch {
+    errors.push(`Failed to parse Claude response: ${text.slice(0, 200)}`);
+    return { relevant, notRelevant };
+  }
+
+  const analysisRows: any[] = [];
+  const analyzedIds: string[] = [];
+
+  for (const result of results) {
+    const article = batchArticles[result.index];
+    if (!article) {
+      errors.push(`Invalid index ${result.index} in Claude response`);
+      continue;
+    }
+
+    if (!result.is_relevant) {
+      result.summary = null;
+      result.category = null;
+    }
+
+    analysisRows.push({
+      article_id: article.id,
+      is_relevant: result.is_relevant,
+      summary: result.summary,
+      category: result.category,
+      model_used: MODEL,
+    });
+
+    analyzedIds.push(article.id);
+    if (result.is_relevant) relevant++;
+    else notRelevant++;
+  }
+
+  if (analysisRows.length > 0) {
+    const { error: insertErr } = await supabase
+      .from("article_analysis")
+      .insert(analysisRows);
+    if (insertErr) {
+      errors.push(`Batch insert error: ${insertErr.message}`);
+    }
+  }
+
+  if (analyzedIds.length > 0) {
+    const { error: updateErr } = await supabase
+      .from("articles")
+      .update({ analyzed: true })
+      .in("id", analyzedIds);
+    if (updateErr) {
+      errors.push(`Batch update error: ${updateErr.message}`);
+    }
+  }
+
+  return { relevant, notRelevant };
+}
+
 export async function runAnalysis() {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const startTime = Date.now();
+  const cutoff = getArticleAgeCutoff();
 
   const { data: articles, error: fetchError } = await supabase
     .from("articles")
     .select("*")
     .eq("analyzed", false)
-    .gte("fetched_at", cutoff)
-    .limit(150);
+    .gte("fetched_at", cutoff);
 
   if (fetchError) {
     throw new Error(fetchError.message);
@@ -106,6 +198,7 @@ export async function runAnalysis() {
         articles_not_relevant: 0,
         errors: [],
       },
+      remaining_unanalyzed: 0,
     };
   }
 
@@ -202,117 +295,40 @@ export async function runAnalysis() {
     medium_confidence: mediumConfidence,
   };
 
-  // --- Step 2: Claude Analysis (only on articles that passed filter) ---
-  if (passedArticles.length === 0) {
-    return {
-      success: true,
-      keyword_filter: keywordFilterStats,
-      claude_analysis: {
-        articles_processed: 0,
-        articles_relevant: 0,
-        articles_not_relevant: 0,
-        errors: [],
-      },
-    };
-  }
-
+  // --- Step 2: Claude Analysis in batches ---
   const errors: string[] = [];
-  let relevant = 0;
-  let notRelevant = 0;
+  let totalRelevant = 0;
+  let totalNotRelevant = 0;
+  let articlesProcessed = 0;
+  let timedOut = false;
 
-  // Send only filtered articles to Claude
-  const response = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: 16384,
-    system:
-      "You analyze news articles to determine if they relate to antisemitism. Respond with valid JSON only, no other text.",
-    messages: [
-      {
-        role: "user",
-        content: buildBatchPrompt(
-          passedArticles.map((a) => ({
-            id: a.id,
-            title: a.title,
-            source: a.source,
-            raw_content: a.raw_content,
-          }))
-        ),
-      },
-    ],
-  });
-
-  let text =
-    response.content[0].type === "text" ? response.content[0].text : "[]";
-
-  // Strip markdown code fences if present
-  text = text.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
-
-  let results: AnalysisResult[];
-  try {
-    results = JSON.parse(text);
-  } catch {
-    throw new Error(`Failed to parse Claude response: ${text.slice(0, 200)}`);
-  }
-
-  // Build bulk inserts
-  const analysisRows: any[] = [];
-  const analyzedIds: string[] = [];
-
-  for (const result of results) {
-    const article = passedArticles[result.index];
-    if (!article) {
-      errors.push(`Invalid index ${result.index} in Claude response`);
-      continue;
+  for (let i = 0; i < passedArticles.length; i += BATCH_SIZE) {
+    // Check timeout before starting a new batch
+    if (Date.now() - startTime > ANALYSIS_TIMEOUT_MS) {
+      timedOut = true;
+      break;
     }
 
-    if (!result.is_relevant) {
-      result.summary = null;
-      result.category = null;
-    }
-
-    analysisRows.push({
-      article_id: article.id,
-      is_relevant: result.is_relevant,
-      summary: result.summary,
-      category: result.category,
-      model_used: MODEL,
-    });
-
-    analyzedIds.push(article.id);
-
-    if (result.is_relevant) relevant++;
-    else notRelevant++;
+    const batch = passedArticles.slice(i, i + BATCH_SIZE);
+    const { relevant, notRelevant } = await analyzeBatch(batch, errors);
+    totalRelevant += relevant;
+    totalNotRelevant += notRelevant;
+    articlesProcessed += batch.length;
   }
 
-  // Batch insert analysis results
-  if (analysisRows.length > 0) {
-    const { error: insertErr } = await supabase
-      .from("article_analysis")
-      .insert(analysisRows);
-    if (insertErr) {
-      errors.push(`Batch insert error: ${insertErr.message}`);
-    }
-  }
-
-  // Batch mark articles as analyzed
-  if (analyzedIds.length > 0) {
-    const { error: updateErr } = await supabase
-      .from("articles")
-      .update({ analyzed: true })
-      .in("id", analyzedIds);
-    if (updateErr) {
-      errors.push(`Batch update error: ${updateErr.message}`);
-    }
-  }
+  // Count remaining unanalyzed articles
+  const remaining = passedArticles.length - articlesProcessed;
 
   return {
     success: true,
     keyword_filter: keywordFilterStats,
     claude_analysis: {
-      articles_processed: passedArticles.length,
-      articles_relevant: relevant,
-      articles_not_relevant: notRelevant,
+      articles_processed: articlesProcessed,
+      articles_relevant: totalRelevant,
+      articles_not_relevant: totalNotRelevant,
       errors,
     },
+    remaining_unanalyzed: remaining,
+    timed_out: timedOut,
   };
 }

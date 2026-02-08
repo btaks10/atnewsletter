@@ -1,6 +1,6 @@
 import Parser from "rss-parser";
 import { supabase } from "./supabase";
-import { FeedSource } from "./config";
+import { FeedSource, getArticleAgeCutoff } from "./config";
 
 const parser = new Parser({
   timeout: 10000,
@@ -19,7 +19,7 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
   try {
     const rss = await parser.parseURL(feed.url);
 
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const cutoff = new Date(getArticleAgeCutoff());
     const recentItems = rss.items.filter((item) => {
       const pubDate = item.pubDate ? new Date(item.pubDate) : null;
       return pubDate && pubDate > cutoff;

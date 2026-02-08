@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getArticleAgeCutoff } from "./config";
 import { supabase } from "./supabase";
 
 const anthropic = new Anthropic({
@@ -67,7 +68,7 @@ Return ONLY the JSON array, no other text.`;
 }
 
 export async function runClustering() {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = getArticleAgeCutoff();
 
   // Query relevant articles analyzed today
   const { data, error: fetchError } = await supabase

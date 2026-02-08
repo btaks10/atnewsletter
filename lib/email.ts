@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { CATEGORY_ORDER } from "./config";
+import { CATEGORY_ORDER, getArticleAgeCutoff } from "./config";
 import { supabase } from "./supabase";
 
 const resend = new Resend(process.env.RESEND_API_KEY!);
@@ -23,15 +23,37 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function buildEmailHtml(articles: DigestArticle[], date: string): string {
+const TOP_STORIES_LIMIT = 30;
+
+function renderFullArticle(article: DigestArticle): string {
+  const authorPart = article.author ? ` &bull; ${article.author}` : "";
+  const alsoCoveredBy =
+    article.relatedArticles && article.relatedArticles.length > 0
+      ? `\n      <div class="source-info" style="margin-top: 4px;">Also covered by: ${article.relatedArticles.map((r) => `<a href="${r.url}" style="color: #888; text-decoration: underline;">${escapeHtml(r.source)}</a>`).join(", ")}</div>`
+      : "";
+  return `
+    <div class="article">
+      <a href="${article.url}">${escapeHtml(article.title)}</a>
+      <div class="source-info">${escapeHtml(article.source)}${authorPart} &bull; ${formatDate(article.published_at)}</div>
+      <p class="summary">${escapeHtml(article.summary)}</p>${alsoCoveredBy}
+    </div>`;
+}
+
+function renderCompactArticle(article: DigestArticle): string {
+  return `
+    <div style="margin-bottom: 8px; padding-left: 16px; border-left: 2px solid #e0e0e0;">
+      <a href="${article.url}" style="color: #1a1a1a; text-decoration: none; font-weight: bold; font-size: 14px;">${escapeHtml(article.title)}</a>
+      <span style="font-size: 12px; color: #888;"> &mdash; ${escapeHtml(article.source)}</span>
+    </div>`;
+}
+
+function groupByCategory(articles: DigestArticle[]): Record<string, DigestArticle[]> {
   const grouped: Record<string, DigestArticle[]> = {};
   for (const article of articles) {
     const cat = article.category || "Other";
     if (!grouped[cat]) grouped[cat] = [];
     grouped[cat].push(article);
   }
-
-  // Sort within each category by published_at descending
   for (const cat of Object.keys(grouped)) {
     grouped[cat].sort(
       (a, b) =>
@@ -39,8 +61,13 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
         new Date(a.published_at).getTime()
     );
   }
+  return grouped;
+}
 
+function buildEmailHtml(articles: DigestArticle[], date: string): string {
   const sources = new Set(articles.map((a) => a.source));
+  const categoryCount = new Set(articles.map((a) => a.category)).size;
+  const isLargeVolume = articles.length > TOP_STORIES_LIMIT;
 
   let html = `
 <!DOCTYPE html>
@@ -61,38 +88,90 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
     .article .source-info { font-size: 13px; color: #888; margin: 2px 0 4px 0; }
     .article .summary { font-size: 14px; color: #444; line-height: 1.5; margin: 0; }
     .footer { border-top: 1px solid #ddd; padding-top: 16px; margin-top: 32px; font-size: 12px; color: #999; }
+    .section-divider { border-top: 2px solid #ddd; padding-top: 16px; margin-top: 28px; margin-bottom: 20px; }
+    .section-divider h2 { font-size: 18px; color: #333; margin: 0 0 4px 0; }
+    .section-divider .meta { font-size: 13px; color: #888; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>Daily Antisemitism News Monitor</h1>
-    <div class="meta">${date} &bull; ${articles.length} article${articles.length !== 1 ? "s" : ""} from ${sources.size} source${sources.size !== 1 ? "s" : ""}</div>
+    <div class="meta">${date} &bull; ${articles.length} article${articles.length !== 1 ? "s" : ""} from ${sources.size} source${sources.size !== 1 ? "s" : ""} across ${categoryCount} categor${categoryCount !== 1 ? "ies" : "y"}</div>
   </div>`;
 
-  for (const category of CATEGORY_ORDER) {
-    const catArticles = grouped[category];
-    if (!catArticles || catArticles.length === 0) continue;
+  if (isLargeVolume) {
+    // Split into Top Stories (full format) and Full Coverage (compact)
+    const topStories: DigestArticle[] = [];
+    const remaining: DigestArticle[] = [];
+    const grouped = groupByCategory(articles);
 
-    html += `
-  <div class="category">
-    <h2>${category}</h2>`;
-
-    for (const article of catArticles) {
-      const authorPart = article.author ? ` &bull; ${article.author}` : "";
-      const alsoCoveredBy =
-        article.relatedArticles && article.relatedArticles.length > 0
-          ? `\n      <div class="source-info" style="margin-top: 4px;">Also covered by: ${article.relatedArticles.map((r) => `<a href="${r.url}" style="color: #888; text-decoration: underline;">${escapeHtml(r.source)}</a>`).join(", ")}</div>`
-          : "";
-      html += `
-    <div class="article">
-      <a href="${article.url}">${escapeHtml(article.title)}</a>
-      <div class="source-info">${escapeHtml(article.source)}${authorPart} &bull; ${formatDate(article.published_at)}</div>
-      <p class="summary">${escapeHtml(article.summary)}</p>${alsoCoveredBy}
-    </div>`;
+    // Take first articles by category priority order until we hit the limit
+    let count = 0;
+    for (const category of CATEGORY_ORDER) {
+      const catArticles = grouped[category];
+      if (!catArticles) continue;
+      for (const article of catArticles) {
+        if (count < TOP_STORIES_LIMIT) {
+          topStories.push(article);
+          count++;
+        } else {
+          remaining.push(article);
+        }
+      }
     }
 
-    html += `
+    // Top Stories section
+    const topGrouped = groupByCategory(topStories);
+    for (const category of CATEGORY_ORDER) {
+      const catArticles = topGrouped[category];
+      if (!catArticles || catArticles.length === 0) continue;
+      html += `
+  <div class="category">
+    <h2>${category}</h2>`;
+      for (const article of catArticles) {
+        html += renderFullArticle(article);
+      }
+      html += `
   </div>`;
+    }
+
+    // Full Coverage section (compact)
+    if (remaining.length > 0) {
+      const remainGrouped = groupByCategory(remaining);
+      html += `
+  <div class="section-divider">
+    <h2>Full Coverage</h2>
+    <div class="meta">${remaining.length} additional article${remaining.length !== 1 ? "s" : ""}</div>
+  </div>`;
+
+      for (const category of CATEGORY_ORDER) {
+        const catArticles = remainGrouped[category];
+        if (!catArticles || catArticles.length === 0) continue;
+        html += `
+  <div class="category">
+    <h2>${category}</h2>`;
+        for (const article of catArticles) {
+          html += renderCompactArticle(article);
+        }
+        html += `
+  </div>`;
+      }
+    }
+  } else {
+    // Standard rendering for <= 30 articles
+    const grouped = groupByCategory(articles);
+    for (const category of CATEGORY_ORDER) {
+      const catArticles = grouped[category];
+      if (!catArticles || catArticles.length === 0) continue;
+      html += `
+  <div class="category">
+    <h2>${category}</h2>`;
+      for (const article of catArticles) {
+        html += renderFullArticle(article);
+      }
+      html += `
+  </div>`;
+    }
   }
 
   html += `
@@ -186,7 +265,7 @@ export async function sendDigest(articles: DigestArticle[]) {
 }
 
 export async function runDigest() {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = getArticleAgeCutoff();
 
   const { data, error: fetchError } = await supabase
     .from("article_analysis")

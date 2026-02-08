@@ -27,6 +27,7 @@ interface ArticleData {
 interface ArticlesResponse {
   date: string;
   total: number;
+  total_analyzed: number;
   sources: string[];
   categories: Record<string, ArticleData[]>;
 }
@@ -65,6 +66,44 @@ function groupByClusters(articles: ArticleData[]): GroupedArticle[] {
   }
 
   return result;
+}
+
+function buildDigest(data: ArticlesResponse) {
+  // Gather all grouped articles across categories
+  const allGrouped: { group: GroupedArticle; category: string }[] = [];
+  for (const [cat, articles] of Object.entries(data.categories)) {
+    for (const g of groupByClusters(articles as ArticleData[])) {
+      allGrouped.push({ group: g, category: cat });
+    }
+  }
+
+  // Sort by coverage volume (most sources first), then standalone
+  allGrouped.sort(
+    (a, b) => (b.group.related.length + 1) - (a.group.related.length + 1)
+  );
+
+  // Top stories: clusters with 2+ articles
+  const topStories = allGrouped.filter((g) => g.group.related.length > 0);
+
+  // Category breakdown: category → count of unique stories (not articles)
+  const catBreakdown: { name: string; stories: number; articles: number }[] = [];
+  for (const [cat, articles] of Object.entries(data.categories)) {
+    const grouped = groupByClusters(articles as ArticleData[]);
+    catBreakdown.push({
+      name: cat,
+      stories: grouped.length,
+      articles: (articles as ArticleData[]).length,
+    });
+  }
+
+  return {
+    totalAnalyzed: data.total_analyzed,
+    totalRelevant: data.total,
+    uniqueSources: data.sources.length,
+    uniqueStories: allGrouped.length,
+    topStories: topStories.slice(0, 7),
+    catBreakdown,
+  };
 }
 
 export default function ArticlesPage() {
@@ -195,113 +234,118 @@ export default function ArticlesPage() {
         </p>
       )}
 
-      {/* TLDR Digest — collapsible card */}
-      {!loading && data && data.total > 0 && (
-        <div className="mb-6">
-          <button
-            onClick={() => setDigestOpen(!digestOpen)}
-            className="w-full flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 hover:bg-gray-800/70 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-gray-100">
-                TLDR Digest
+      {/* TLDR Digest — collapsible summary card */}
+      {!loading && data && data.total > 0 && (() => {
+        const digest = buildDigest(data);
+        return (
+          <div className="mb-6">
+            <button
+              onClick={() => setDigestOpen(!digestOpen)}
+              className={`w-full flex items-center justify-between bg-gray-900 border border-gray-800 px-5 py-3 hover:bg-gray-800/70 transition-colors ${
+                digestOpen ? "rounded-t-lg" : "rounded-lg"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-gray-100">
+                  TLDR
+                </span>
+                <span className="text-xs text-gray-500">
+                  {digest.totalAnalyzed} reviewed, {digest.totalRelevant}{" "}
+                  relevant, {digest.uniqueStories} stories
+                </span>
+              </div>
+              <span className="text-gray-500 text-xs">
+                {digestOpen ? "Hide" : "Show"}
               </span>
-              <span className="text-xs text-gray-500">
-                {data.total} articles across{" "}
-                {Object.keys(data.categories).length} categories
-              </span>
-            </div>
-            <span className="text-gray-500 text-xs">
-              {digestOpen ? "Hide" : "Show"}
-            </span>
-          </button>
+            </button>
 
-          {digestOpen && (
-            <div className="bg-gray-900 border border-t-0 border-gray-800 rounded-b-lg px-5 pb-5 -mt-1 space-y-5">
-              {Object.entries(data.categories).map(([cat, articles]) => {
-                const grouped = groupByClusters(articles as ArticleData[]);
-                const articleCount = (articles as ArticleData[]).length;
-                return (
-                  <div key={cat}>
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 pt-4 pb-2 border-b border-gray-800 mb-3">
-                      {cat}
-                      <span className="ml-2 text-gray-600 font-normal normal-case tracking-normal">
-                        {articleCount} article{articleCount !== 1 ? "s" : ""}
+            {digestOpen && (
+              <div className="bg-gray-900 border border-t-0 border-gray-800 rounded-b-lg px-5 pb-5">
+                {/* Scan summary */}
+                <div className="pt-4 pb-4 border-b border-gray-800">
+                  <p className="text-sm text-gray-300 leading-relaxed">
+                    Scanned{" "}
+                    <span className="text-gray-100 font-medium">
+                      {digest.totalAnalyzed} articles
+                    </span>{" "}
+                    from{" "}
+                    <span className="text-gray-100 font-medium">
+                      {digest.uniqueSources} sources
+                    </span>
+                    .{" "}
+                    <span className="text-gray-100 font-medium">
+                      {digest.totalRelevant}
+                    </span>{" "}
+                    flagged as relevant across{" "}
+                    <span className="text-gray-100 font-medium">
+                      {digest.catBreakdown.length} categories
+                    </span>
+                    , distilling to{" "}
+                    <span className="text-gray-100 font-medium">
+                      {digest.uniqueStories} distinct stories
+                    </span>
+                    .
+                  </p>
+
+                  {/* Category breakdown pills */}
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {digest.catBreakdown.map((cat) => (
+                      <span
+                        key={cat.name}
+                        className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-full"
+                      >
+                        {cat.name}{" "}
+                        <span className="text-gray-500">
+                          {cat.stories}
+                          {cat.stories !== cat.articles &&
+                            ` (${cat.articles} articles)`}
+                        </span>
                       </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Top stories */}
+                {digest.topStories.length > 0 && (
+                  <div className="pt-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+                      Most Covered Stories
                     </h3>
                     <div className="space-y-3">
-                      {grouped.map(({ primary, related }) => (
-                        <div key={primary.id} className="pl-3 border-l-2 border-gray-800">
-                          <a
-                            href={primary.articles.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-gray-100 hover:text-blue-400 leading-snug"
-                          >
-                            {primary.articles.title}
-                          </a>
-                          {primary.summary && (
-                            <p className="text-sm text-gray-400 mt-1 leading-relaxed">
-                              {primary.summary}
+                      {digest.topStories.map(({ group, category }) => (
+                        <div
+                          key={group.primary.id}
+                          className="flex gap-3 items-start"
+                        >
+                          <span className="text-xs font-medium text-gray-600 bg-gray-800 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
+                            {group.related.length + 1}x
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-sm text-gray-200 leading-snug">
+                              {group.primary.summary || group.primary.articles.title}
                             </p>
-                          )}
-                          {related.length > 0 && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {related.length <= 3 ? (
-                                <>
-                                  {[primary, ...related].map((r, i) => (
-                                    <span key={r.id}>
-                                      {i > 0 && ", "}
-                                      <a
-                                        href={r.articles.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-400 hover:underline"
-                                      >
-                                        {r.articles.source}
-                                      </a>
-                                    </span>
-                                  ))}
-                                </>
-                              ) : (
-                                <>
-                                  {related.length + 1} sources:{" "}
-                                  {[primary, ...related.slice(0, 2)].map(
-                                    (r, i) => (
-                                      <span key={r.id}>
-                                        {i > 0 && ", "}
-                                        <a
-                                          href={r.articles.url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="text-blue-400 hover:underline"
-                                        >
-                                          {r.articles.source}
-                                        </a>
-                                      </span>
-                                    )
-                                  )}
-                                  {" + "}
-                                  {related.length - 2} more
-                                </>
-                              )}
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {category}
                             </p>
-                          )}
-                          {related.length === 0 && (
-                            <p className="text-xs text-gray-600 mt-0.5">
-                              {primary.articles.source}
-                            </p>
-                          )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                )}
+
+                {/* Single-source stories count */}
+                {digest.uniqueStories - digest.topStories.length > 0 && (
+                  <p className="text-xs text-gray-600 mt-4 pt-3 border-t border-gray-800">
+                    + {digest.uniqueStories - digest.topStories.length}{" "}
+                    single-source stories across all categories
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Articles list */}
       {!loading && data && data.total > 0 && (

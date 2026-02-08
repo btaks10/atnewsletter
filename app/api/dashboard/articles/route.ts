@@ -99,9 +99,17 @@ export async function GET(request: NextRequest) {
     ...new Set((data || []).map((row: any) => row.articles?.source).filter(Boolean)),
   ].sort();
 
+  // Count total articles analyzed that day (relevant + not relevant)
+  const { count: totalAnalyzed } = await supabase
+    .from("article_analysis")
+    .select("id", { count: "exact", head: true })
+    .gte("analyzed_at", startOfDay)
+    .lte("analyzed_at", endOfDay);
+
   return NextResponse.json({
     date,
     total: data?.length || 0,
+    total_analyzed: totalAnalyzed || 0,
     sources,
     categories: grouped,
   });

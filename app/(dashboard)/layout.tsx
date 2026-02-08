@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -24,6 +24,7 @@ export default function DashboardLayout({
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncToast, setSyncToast] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const links = [
     { href: "/", label: "Articles" },
@@ -32,38 +33,67 @@ export default function DashboardLayout({
   ];
 
   const fetchLastSync = useCallback(() => {
-    fetch("/api/dashboard/sync")
+    return fetch("/api/dashboard/sync")
       .then((res) => res.json())
       .then((data) => {
         if (data.last_sync) setLastSync(data.last_sync);
+        return data.last_sync;
       })
-      .catch(() => {});
+      .catch(() => null);
   }, []);
 
   useEffect(() => {
     fetchLastSync();
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [fetchLastSync]);
 
   async function handleSync() {
     setSyncing(true);
-    setSyncToast(null);
+    setSyncToast("Pipeline started — this takes about a minute...");
+
+    // Capture the sync time before triggering
+    const syncBefore = lastSync;
+
     try {
       const res = await fetch("/api/dashboard/sync", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        setSyncToast(
-          `Sync complete — ${data.analyze?.claude_analysis?.articles_relevant ?? 0} relevant articles found`
-        );
-        fetchLastSync();
-      } else {
+      if (!res.ok) {
+        const data = await res.json();
         setSyncToast(`Sync failed: ${data.error}`);
+        setSyncing(false);
+        setTimeout(() => setSyncToast(null), 5000);
+        return;
       }
     } catch {
       setSyncToast("Sync failed: network error");
-    } finally {
       setSyncing(false);
       setTimeout(() => setSyncToast(null), 5000);
+      return;
     }
+
+    // Poll every 10s to detect when pipeline completes (new pipeline_stats row)
+    let polls = 0;
+    pollRef.current = setInterval(async () => {
+      polls++;
+      const newSync = await fetchLastSync();
+
+      if (newSync && newSync !== syncBefore) {
+        // Pipeline completed — new stats row appeared
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        setSyncing(false);
+        setSyncToast("Sync complete — refresh the page to see new articles");
+        setTimeout(() => setSyncToast(null), 8000);
+      } else if (polls >= 18) {
+        // 3 minutes max wait
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        setSyncing(false);
+        setSyncToast("Sync is still running — check back shortly");
+        setTimeout(() => setSyncToast(null), 8000);
+      }
+    }, 10000);
   }
 
   return (

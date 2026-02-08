@@ -166,8 +166,8 @@ export async function runGNewsIngestion() {
       // Continue to next query
     }
 
-    // Rate limiting: 500ms between requests
-    await sleep(500);
+    // Rate limiting: 200ms between requests (Essentials plan)
+    await sleep(200);
   }
 
   return results;

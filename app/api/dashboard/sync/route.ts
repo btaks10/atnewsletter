@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-export const maxDuration = 60;
-
 // GET: return last sync time
 export async function GET() {
   const { data } = await supabase
@@ -20,28 +18,22 @@ export async function GET() {
   });
 }
 
-// POST: trigger a pipeline run
+// POST: fire-and-forget pipeline trigger, returns immediately
 export async function POST() {
   const secret = process.env.TEST_TRIGGER_SECRET;
   const baseUrl = process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000";
 
-  const res = await fetch(`${baseUrl}/api/trigger-digest`, {
+  // Fire and forget — trigger-digest runs as a separate serverless invocation
+  fetch(`${baseUrl}/api/trigger-digest`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${secret}`,
     },
+  }).catch(() => {
+    // Pipeline runs independently; errors are logged in pipeline_stats
   });
 
-  const result = await res.json();
-
-  if (!res.ok) {
-    return NextResponse.json(
-      { error: result.error || "Pipeline failed" },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json(result);
+  return NextResponse.json({ status: "started" });
 }

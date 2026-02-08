@@ -68,7 +68,7 @@ function Toast({ message, onClose }: { message: string; onClose: () => void }) {
   }, [onClose]);
 
   return (
-    <div className="fixed bottom-4 right-4 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm shadow-lg z-50">
+    <div className="fixed bottom-4 right-4 bg-gray-100 text-gray-900 px-4 py-2 rounded-lg text-sm shadow-lg z-50">
       {message}
     </div>
   );
@@ -119,8 +119,8 @@ export default function SourcesPage() {
 
   useEffect(() => { reload(); }, []);
 
-  if (loading) return <p className="text-gray-500 text-sm">Loading...</p>;
-  if (!data) return <p className="text-gray-500 text-sm">Failed to load.</p>;
+  if (loading) return <p className="text-gray-400 text-sm">Loading...</p>;
+  if (!data) return <p className="text-gray-400 text-sm">Failed to load.</p>;
 
   const typeLabel: Record<string, string> = {
     jewish_media: "Jewish Media",
@@ -335,7 +335,7 @@ export default function SourcesPage() {
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
+      <div className="border-b border-gray-800">
         <nav className="flex gap-6">
           {TABS.map((tab) => (
             <button
@@ -343,12 +343,12 @@ export default function SourcesPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? "border-gray-900 text-gray-900"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  ? "border-white text-white"
+                  : "border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600"
               }`}
             >
               {tab.label}
-              <span className="ml-1.5 text-xs text-gray-400">
+              <span className="ml-1.5 text-xs text-gray-500">
                 {tabCounts[tab.key]}
               </span>
             </button>
@@ -357,7 +357,7 @@ export default function SourcesPage() {
       </div>
 
       {/* Tab description */}
-      <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 text-sm text-blue-800">
+      <div className="bg-blue-950 border border-blue-900 rounded-lg px-4 py-3 text-sm text-blue-300">
         {currentTab.description}
       </div>
 
@@ -365,45 +365,45 @@ export default function SourcesPage() {
       {activeTab === "rss" && (
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-lg font-semibold text-gray-100">
               RSS Feeds ({data.rss_feeds.length})
             </h2>
             <button
               onClick={() => setShowAddFeed(!showAddFeed)}
-              className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800"
+              className="px-3 py-1.5 text-sm bg-white text-gray-900 rounded-md hover:bg-gray-200"
             >
               {showAddFeed ? "Cancel" : "+ Add Feed"}
             </button>
           </div>
 
           {showAddFeed && (
-            <div className="bg-gray-50 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div className="bg-gray-800 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end border border-gray-700">
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs text-gray-500 mb-1">Name</label>
+                <label className="block text-xs text-gray-400 mb-1">Name</label>
                 <input
                   type="text"
                   value={newFeed.name}
                   onChange={(e) => setNewFeed({ ...newFeed, name: e.target.value })}
                   placeholder="NYT - World"
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 />
               </div>
               <div className="flex-[2] min-w-[300px]">
-                <label className="block text-xs text-gray-500 mb-1">URL</label>
+                <label className="block text-xs text-gray-400 mb-1">URL</label>
                 <input
                   type="url"
                   value={newFeed.url}
                   onChange={(e) => setNewFeed({ ...newFeed, url: e.target.value })}
                   placeholder="https://rss.nytimes.com/..."
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 />
               </div>
               <div className="w-[140px]">
-                <label className="block text-xs text-gray-500 mb-1">Type</label>
+                <label className="block text-xs text-gray-400 mb-1">Type</label>
                 <select
                   value={newFeed.type}
                   onChange={(e) => setNewFeed({ ...newFeed, type: e.target.value })}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 >
                   <option value="jewish_media">Jewish Media</option>
                   <option value="mainstream">Mainstream</option>
@@ -419,47 +419,47 @@ export default function SourcesPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-800">
+              <thead className="bg-gray-800">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Articles (7d)</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">New (7d)</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Source</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Articles (7d)</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">New (7d)</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-800">
                 {data.rss_feeds.map((feed) => (
                   <tr key={feed.id} className={!feed.is_active ? "opacity-50" : ""}>
-                    <td className="px-4 py-3 text-sm font-medium">{feed.name}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-gray-100">{feed.name}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-gray-800 text-gray-400">
                         {typeLabel[feed.type] || feed.type}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`px-2 py-0.5 text-xs rounded-full ${
                         !feed.is_active
-                          ? "bg-yellow-100 text-yellow-800"
+                          ? "bg-yellow-900 text-yellow-300"
                           : feed.status === "success"
-                            ? "bg-green-100 text-green-800"
+                            ? "bg-green-900 text-green-300"
                             : feed.status === "failure"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-gray-100 text-gray-500"
+                              ? "bg-red-900 text-red-300"
+                              : "bg-gray-800 text-gray-500"
                       }`}>
                         {!feed.is_active ? "Paused" : feed.status === "success" ? "Active" : feed.status === "failure" ? "Failed" : "Unknown"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-right">{feed.articles_7d}</td>
-                    <td className="px-4 py-3 text-sm text-right">{feed.new_articles_7d}</td>
+                    <td className="px-4 py-3 text-sm text-right text-gray-300">{feed.articles_7d}</td>
+                    <td className="px-4 py-3 text-sm text-right text-gray-300">{feed.new_articles_7d}</td>
                     <td className="px-4 py-3 text-sm text-center whitespace-nowrap">
-                      <button onClick={() => toggleFeed(feed.id, feed.is_active)} className="text-xs text-blue-600 hover:text-blue-800 mr-3">
+                      <button onClick={() => toggleFeed(feed.id, feed.is_active)} className="text-xs text-blue-400 hover:text-blue-300 mr-3">
                         {feed.is_active ? "Pause" : "Resume"}
                       </button>
-                      <button onClick={() => deleteFeed(feed.id, feed.name)} className="text-xs text-red-600 hover:text-red-800">
+                      <button onClick={() => deleteFeed(feed.id, feed.name)} className="text-xs text-red-400 hover:text-red-300">
                         Delete
                       </button>
                     </td>
@@ -475,33 +475,33 @@ export default function SourcesPage() {
       {activeTab === "gnews" && (
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">GNews Queries ({data.gnews_queries.length})</h2>
+            <h2 className="text-lg font-semibold text-gray-100">GNews Queries ({data.gnews_queries.length})</h2>
             <button
               onClick={() => setShowAddGNews(!showAddGNews)}
-              className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800"
+              className="px-3 py-1.5 text-sm bg-white text-gray-900 rounded-md hover:bg-gray-200"
             >
               {showAddGNews ? "Cancel" : "+ Add Query"}
             </button>
           </div>
 
           {showAddGNews && (
-            <div className="bg-gray-50 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div className="bg-gray-800 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end border border-gray-700">
               <div className="flex-[2] min-w-[300px]">
-                <label className="block text-xs text-gray-500 mb-1">Query</label>
+                <label className="block text-xs text-gray-400 mb-1">Query</label>
                 <input
                   type="text"
                   value={newGNews.query}
                   onChange={(e) => setNewGNews({ ...newGNews, query: e.target.value })}
                   placeholder={'"antisemitism" AND "campus"'}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md font-mono"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md font-mono"
                 />
               </div>
               <div className="flex-1 min-w-[180px]">
-                <label className="block text-xs text-gray-500 mb-1">Category</label>
+                <label className="block text-xs text-gray-400 mb-1">Category</label>
                 <select
                   value={newGNews.category}
                   onChange={(e) => setNewGNews({ ...newGNews, category: e.target.value })}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 >
                   <option value="">None</option>
                   <option value="Hate Crimes & Violence">Hate Crimes & Violence</option>
@@ -514,14 +514,14 @@ export default function SourcesPage() {
                 </select>
               </div>
               <div className="w-[80px]">
-                <label className="block text-xs text-gray-500 mb-1">Priority</label>
+                <label className="block text-xs text-gray-400 mb-1">Priority</label>
                 <input
                   type="number"
                   value={newGNews.priority}
                   onChange={(e) => setNewGNews({ ...newGNews, priority: e.target.value })}
                   min="1"
                   max="10"
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 />
               </div>
               <button onClick={addGNews} className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700">
@@ -530,39 +530,39 @@ export default function SourcesPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-800">
+              <thead className="bg-gray-800">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Query</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Priority</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Run</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Results</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Query</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Category</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Priority</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Last Run</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Results</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-400 uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-800">
                 {data.gnews_queries.map((q) => (
                   <tr key={q.id} className={!q.is_active ? "opacity-50" : ""}>
-                    <td className="px-4 py-3 text-xs font-mono max-w-xs truncate">{q.query}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{q.category || "--"}</td>
-                    <td className="px-4 py-3 text-sm text-center">{q.priority}</td>
+                    <td className="px-4 py-3 text-xs font-mono max-w-xs truncate text-gray-200">{q.query}</td>
+                    <td className="px-4 py-3 text-sm text-gray-400">{q.category || "--"}</td>
+                    <td className="px-4 py-3 text-sm text-center text-gray-300">{q.priority}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${q.is_active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${q.is_active ? "bg-green-900 text-green-300" : "bg-gray-800 text-gray-500"}`}>
                         {q.is_active ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                    <td className="px-4 py-3 text-sm text-gray-400">
                       {q.last_run_at ? new Date(q.last_run_at).toLocaleString() : "Never"}
                     </td>
-                    <td className="px-4 py-3 text-sm text-right">{q.last_result_count}</td>
+                    <td className="px-4 py-3 text-sm text-right text-gray-300">{q.last_result_count}</td>
                     <td className="px-4 py-3 text-sm text-center whitespace-nowrap">
-                      <button onClick={() => toggleGNews(q.id, q.is_active)} className="text-xs text-blue-600 hover:text-blue-800 mr-3">
+                      <button onClick={() => toggleGNews(q.id, q.is_active)} className="text-xs text-blue-400 hover:text-blue-300 mr-3">
                         {q.is_active ? "Pause" : "Resume"}
                       </button>
-                      <button onClick={() => deleteGNews(q.id)} className="text-xs text-red-600 hover:text-red-800">
+                      <button onClick={() => deleteGNews(q.id)} className="text-xs text-red-400 hover:text-red-300">
                         Delete
                       </button>
                     </td>
@@ -578,33 +578,33 @@ export default function SourcesPage() {
       {activeTab === "keywords" && (
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Keywords ({data.keywords.length})</h2>
+            <h2 className="text-lg font-semibold text-gray-100">Keywords ({data.keywords.length})</h2>
             <button
               onClick={() => setShowAddKeyword(!showAddKeyword)}
-              className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-md hover:bg-gray-800"
+              className="px-3 py-1.5 text-sm bg-white text-gray-900 rounded-md hover:bg-gray-200"
             >
               {showAddKeyword ? "Cancel" : "+ Add Keyword"}
             </button>
           </div>
 
           {showAddKeyword && (
-            <div className="bg-gray-50 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end">
+            <div className="bg-gray-800 rounded-lg p-4 mb-4 flex flex-wrap gap-3 items-end border border-gray-700">
               <div className="flex-1 min-w-[200px]">
-                <label className="block text-xs text-gray-500 mb-1">Keyword</label>
+                <label className="block text-xs text-gray-400 mb-1">Keyword</label>
                 <input
                   type="text"
                   value={newKeyword.keyword}
                   onChange={(e) => setNewKeyword({ ...newKeyword, keyword: e.target.value })}
                   placeholder="antisemitic"
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 />
               </div>
               <div className="w-[140px]">
-                <label className="block text-xs text-gray-500 mb-1">Tier</label>
+                <label className="block text-xs text-gray-400 mb-1">Tier</label>
                 <select
                   value={newKeyword.tier}
                   onChange={(e) => setNewKeyword({ ...newKeyword, tier: e.target.value })}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-600 bg-gray-900 text-gray-100 rounded-md"
                 >
                   <option value="primary">Primary</option>
                   <option value="secondary">Secondary</option>
@@ -622,28 +622,28 @@ export default function SourcesPage() {
             return (
               <div key={tier} className="mb-8">
                 <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-sm font-semibold">
+                  <h3 className="text-sm font-semibold text-gray-200">
                     {tierLabel[tier]} ({tierKeywords.length})
                   </h3>
                 </div>
-                <p className="text-xs text-gray-400 mb-3">
+                <p className="text-xs text-gray-500 mb-3">
                   {tierSummary(tierKeywords)}
                 </p>
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                <div className="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-800">
+                    <thead className="bg-gray-800">
                       <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Keyword</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-20">7d</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-20">30d</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-36">Matches (30d)</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-28">Relevance</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-28">Last Match</th>
-                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase w-24">Actions</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Keyword</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase w-20">7d</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase w-20">30d</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase w-36">Matches (30d)</th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase w-28">Relevance</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase w-28">Last Match</th>
+                        <th className="px-4 py-2 text-center text-xs font-medium text-gray-400 uppercase w-24">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-800">
                       {tierKeywords.map((k) => {
                         const s = getStats(k.keyword);
                         const relevanceRate =
@@ -660,30 +660,30 @@ export default function SourcesPage() {
                           <tr
                             key={k.id}
                             className={`${!k.is_active ? "opacity-40" : ""} ${
-                              noMatches && k.is_active ? "bg-orange-50/50" : ""
+                              noMatches && k.is_active ? "bg-orange-950/30" : ""
                             }`}
                           >
-                            <td className="px-4 py-2 text-sm font-medium">
+                            <td className="px-4 py-2 text-sm font-medium text-gray-100">
                               {k.keyword}
                               {noMatches && k.is_active && (
-                                <span className="ml-2 text-xs text-orange-500">no matches</span>
+                                <span className="ml-2 text-xs text-orange-400">no matches</span>
                               )}
                             </td>
-                            <td className="px-4 py-2 text-sm text-right tabular-nums text-gray-600">
+                            <td className="px-4 py-2 text-sm text-right tabular-nums text-gray-400">
                               {s.matches_7d}
                             </td>
-                            <td className="px-4 py-2 text-sm text-right tabular-nums font-medium">
+                            <td className="px-4 py-2 text-sm text-right tabular-nums font-medium text-gray-200">
                               {s.matches_30d}
                             </td>
                             <td className="px-4 py-2">
-                              <div className="w-full bg-gray-100 rounded-full h-2">
+                              <div className="w-full bg-gray-700 rounded-full h-2">
                                 <div
                                   className={`h-2 rounded-full ${
                                     relevanceRate >= 50
                                       ? "bg-green-500"
                                       : relevanceRate > 0
                                         ? "bg-blue-500"
-                                        : "bg-gray-300"
+                                        : "bg-gray-500"
                                   }`}
                                   style={{ width: `${barWidth}%` }}
                                 />
@@ -694,19 +694,19 @@ export default function SourcesPage() {
                                 <span
                                   className={`font-medium ${
                                     relevanceRate >= 50
-                                      ? "text-green-700"
+                                      ? "text-green-400"
                                       : relevanceRate > 0
-                                        ? "text-blue-700"
-                                        : "text-gray-400"
+                                        ? "text-blue-400"
+                                        : "text-gray-500"
                                   }`}
                                 >
                                   {relevanceRate}%
-                                  <span className="text-xs text-gray-400 ml-1">
+                                  <span className="text-xs text-gray-500 ml-1">
                                     ({s.relevant_matches}/{s.matches_30d})
                                   </span>
                                 </span>
                               ) : (
-                                <span className="text-gray-300">--</span>
+                                <span className="text-gray-600">--</span>
                               )}
                             </td>
                             <td className="px-4 py-2 text-xs text-gray-500">
@@ -715,13 +715,13 @@ export default function SourcesPage() {
                             <td className="px-4 py-2 text-center whitespace-nowrap">
                               <button
                                 onClick={() => toggleKeyword(k.id, k.is_active)}
-                                className="text-xs text-blue-600 hover:text-blue-800 mr-2"
+                                className="text-xs text-blue-400 hover:text-blue-300 mr-2"
                               >
                                 {k.is_active ? "Pause" : "Resume"}
                               </button>
                               <button
                                 onClick={() => deleteKeyword(k.id, k.keyword)}
-                                className="text-xs text-red-600 hover:text-red-800"
+                                className="text-xs text-red-400 hover:text-red-300"
                               >
                                 Delete
                               </button>
@@ -731,7 +731,7 @@ export default function SourcesPage() {
                       })}
                       {tierKeywords.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-4 py-4 text-sm text-gray-400 text-center">
+                          <td colSpan={7} className="px-4 py-4 text-sm text-gray-500 text-center">
                             No keywords in this tier
                           </td>
                         </tr>

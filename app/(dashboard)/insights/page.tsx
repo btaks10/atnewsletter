@@ -18,14 +18,14 @@ import {
 } from "recharts";
 
 const COLORS = [
-  "#2563eb",
-  "#dc2626",
-  "#16a34a",
-  "#ca8a04",
-  "#9333ea",
-  "#0891b2",
-  "#e11d48",
-  "#65a30d",
+  "#3b82f6",
+  "#ef4444",
+  "#22c55e",
+  "#eab308",
+  "#a855f7",
+  "#06b6d4",
+  "#f43f5e",
+  "#84cc16",
 ];
 
 const TIME_RANGES = [
@@ -37,12 +37,19 @@ const TIME_RANGES = [
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="bg-gray-50 rounded-lg p-4 text-center">
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs text-gray-500 mt-1">{label}</div>
+    <div className="bg-gray-800 rounded-lg p-4 text-center border border-gray-700">
+      <div className="text-2xl font-bold text-gray-100">{value}</div>
+      <div className="text-xs text-gray-400 mt-1">{label}</div>
     </div>
   );
 }
+
+const darkTooltipStyle = {
+  backgroundColor: "#1f2937",
+  border: "1px solid #374151",
+  borderRadius: "8px",
+  color: "#f3f4f6",
+};
 
 export default function InsightsPage() {
   const [days, setDays] = useState(7);
@@ -60,8 +67,8 @@ export default function InsightsPage() {
       .catch(() => setLoading(false));
   }, [days]);
 
-  if (loading) return <p className="text-gray-500 text-sm">Loading...</p>;
-  if (!data) return <p className="text-gray-500 text-sm">Failed to load data.</p>;
+  if (loading) return <p className="text-gray-400 text-sm">Loading...</p>;
+  if (!data) return <p className="text-gray-400 text-sm">Failed to load data.</p>;
 
   const lineData = (data.pipeline_stats || []).map((stat: any) => ({
     date: stat.run_date,
@@ -126,8 +133,8 @@ export default function InsightsPage() {
             onClick={() => setDays(range.value)}
             className={`px-3 py-1.5 text-sm rounded-md ${
               days === range.value
-                ? "bg-gray-900 text-white"
-                : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                ? "bg-white text-gray-900"
+                : "bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700"
             }`}
           >
             {range.label}
@@ -146,15 +153,15 @@ export default function InsightsPage() {
 
       {/* Line chart */}
       {lineData.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold mb-4">Volume Over Time</h3>
+        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+          <h3 className="text-sm font-semibold mb-4 text-gray-100">Volume Over Time</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={lineData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "#9ca3af" }} stroke="#4b5563" />
+              <YAxis tick={{ fill: "#9ca3af" }} stroke="#4b5563" />
+              <Tooltip contentStyle={darkTooltipStyle} />
+              <Legend wrapperStyle={{ color: "#d1d5db" }} />
               <Line
                 type="monotone"
                 dataKey="ingested"
@@ -170,7 +177,7 @@ export default function InsightsPage() {
               <Line
                 type="monotone"
                 dataKey="relevant"
-                stroke="#2563eb"
+                stroke="#3b82f6"
                 name="Relevant"
               />
             </LineChart>
@@ -181,20 +188,21 @@ export default function InsightsPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Category breakdown */}
         {categoryData.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold mb-4">By Category</h3>
+          <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+            <h3 className="text-sm font-semibold mb-4 text-gray-100">By Category</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={categoryData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis type="number" tick={{ fill: "#9ca3af" }} stroke="#4b5563" />
                 <YAxis
                   dataKey="name"
                   type="category"
                   width={160}
-                  tick={{ fontSize: 11 }}
+                  tick={{ fontSize: 11, fill: "#9ca3af" }}
+                  stroke="#4b5563"
                 />
-                <Tooltip />
-                <Bar dataKey="count" fill="#2563eb" />
+                <Tooltip contentStyle={darkTooltipStyle} />
+                <Bar dataKey="count" fill="#3b82f6" />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -202,8 +210,8 @@ export default function InsightsPage() {
 
         {/* Source type pie */}
         {sourceTypeData.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold mb-4">By Source Type</h3>
+          <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+            <h3 className="text-sm font-semibold mb-4 text-gray-100">By Source Type</h3>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -213,7 +221,7 @@ export default function InsightsPage() {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  label
+                  label={{ fill: "#d1d5db" }}
                 >
                   {sourceTypeData.map((_: any, index: number) => (
                     <Cell
@@ -222,8 +230,8 @@ export default function InsightsPage() {
                     />
                   ))}
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip contentStyle={darkTooltipStyle} />
+                <Legend wrapperStyle={{ color: "#d1d5db" }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -232,28 +240,29 @@ export default function InsightsPage() {
 
       {/* Top sources */}
       {sourceData.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold mb-4">Top Sources</h3>
+        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+          <h3 className="text-sm font-semibold mb-4 text-gray-100">Top Sources</h3>
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={sourceData} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis type="number" tick={{ fill: "#9ca3af" }} stroke="#4b5563" />
               <YAxis
                 dataKey="name"
                 type="category"
                 width={150}
-                tick={{ fontSize: 11 }}
+                tick={{ fontSize: 11, fill: "#9ca3af" }}
+                stroke="#4b5563"
               />
-              <Tooltip />
-              <Bar dataKey="count" fill="#16a34a" />
+              <Tooltip contentStyle={darkTooltipStyle} />
+              <Bar dataKey="count" fill="#22c55e" />
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
       {/* Feedback summary */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h3 className="text-sm font-semibold mb-4">Feedback Summary</h3>
+      <div className="bg-gray-900 rounded-lg border border-gray-800 p-4">
+        <h3 className="text-sm font-semibold mb-4 text-gray-100">Feedback Summary</h3>
         <div className="grid grid-cols-3 gap-4">
           <StatCard label="Total Feedback" value={fb.total || 0} />
           <StatCard label="Marked Relevant" value={fb.relevant || 0} />

@@ -149,12 +149,12 @@ export default function ArticlesPage() {
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
+          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
         />
         <select
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
+          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
         >
           <option value="">All Categories</option>
           {categories.map((cat) => (
@@ -166,7 +166,7 @@ export default function ArticlesPage() {
         <select
           value={source}
           onChange={(e) => setSource(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
+          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
         >
           <option value="">All Sources</option>
           {(data?.sources || []).map((s) => (
@@ -178,7 +178,7 @@ export default function ArticlesPage() {
         <select
           value={sourceType}
           onChange={(e) => setSourceType(e.target.value)}
-          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm bg-white"
+          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
         >
           <option value="">All Types</option>
           <option value="rss">RSS</option>
@@ -186,17 +186,17 @@ export default function ArticlesPage() {
         </select>
       </div>
 
-      {loading && <p className="text-gray-500 text-sm">Loading articles...</p>}
+      {loading && <p className="text-gray-400 text-sm">Loading articles...</p>}
 
       {!loading && data && data.total === 0 && (
-        <p className="text-gray-500 text-sm">
+        <p className="text-gray-400 text-sm">
           No articles found for {data.date}.
         </p>
       )}
 
       {!loading && data && data.total > 0 && (
         <div className="space-y-8">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-400">
             {data.date} &mdash; {data.total} article
             {data.total !== 1 ? "s" : ""}
           </p>
@@ -205,14 +205,14 @@ export default function ArticlesPage() {
             const grouped = groupByClusters(articles as ArticleData[]);
             return (
               <section key={cat}>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 border-b border-gray-200 pb-2 mb-4">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 pb-2 mb-4">
                   {cat}
                 </h2>
                 <div className="space-y-3">
                   {grouped.map(({ primary, related }) => (
                     <div
                       key={primary.id}
-                      className="bg-white rounded-lg border border-gray-200 p-4"
+                      className="bg-gray-900 rounded-lg border border-gray-800 p-4"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -220,7 +220,7 @@ export default function ArticlesPage() {
                             href={primary.articles.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-gray-900 hover:text-blue-600 leading-snug"
+                            className="font-medium text-gray-100 hover:text-blue-400 leading-snug"
                           >
                             {primary.articles.title}
                           </a>
@@ -241,8 +241,8 @@ export default function ArticlesPage() {
                             <span
                               className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
                                 primary.articles.source_type === "gnews_api"
-                                  ? "bg-blue-100 text-blue-700"
-                                  : "bg-gray-100 text-gray-600"
+                                  ? "bg-blue-900 text-blue-300"
+                                  : "bg-gray-800 text-gray-400"
                               }`}
                             >
                               {primary.articles.source_type === "gnews_api"
@@ -256,14 +256,14 @@ export default function ArticlesPage() {
                             onClick={() =>
                               handleFeedback(primary.article_id, "relevant")
                             }
-                            className={`p-1.5 rounded text-lg leading-none ${
+                            className={`w-6 h-6 flex items-center justify-center rounded text-sm font-medium transition-colors ${
                               feedbackState[primary.article_id] === "relevant"
-                                ? "bg-green-100"
-                                : "hover:bg-gray-100"
+                                ? "bg-green-800 text-green-300"
+                                : "text-green-600 bg-gray-800 hover:bg-gray-700"
                             }`}
                             title="Relevant"
                           >
-                            &#x1F44D;
+                            +
                           </button>
                           <button
                             onClick={() =>
@@ -272,25 +272,25 @@ export default function ArticlesPage() {
                                 "not_relevant"
                               )
                             }
-                            className={`p-1.5 rounded text-lg leading-none ${
+                            className={`w-6 h-6 flex items-center justify-center rounded text-sm font-medium transition-colors ${
                               feedbackState[primary.article_id] ===
                               "not_relevant"
-                                ? "bg-red-100"
-                                : "hover:bg-gray-100"
+                                ? "bg-red-800 text-red-300"
+                                : "text-red-600 bg-gray-800 hover:bg-gray-700"
                             }`}
                             title="Not relevant"
                           >
-                            &#x1F44E;
+                            +
                           </button>
                         </div>
                       </div>
                       {primary.summary && (
-                        <p className="mt-2 text-sm text-gray-600">
+                        <p className="mt-2 text-sm text-gray-400">
                           {primary.summary}
                         </p>
                       )}
                       {related.length > 0 && (
-                        <p className="mt-2 text-xs text-gray-400">
+                        <p className="mt-2 text-xs text-gray-500">
                           Also covered by:{" "}
                           {related.map((r, i) => (
                             <span key={r.id}>
@@ -299,7 +299,7 @@ export default function ArticlesPage() {
                                 href={r.articles.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-blue-500 hover:underline"
+                                className="text-blue-400 hover:underline"
                               >
                                 {r.articles.source}
                               </a>
@@ -318,7 +318,7 @@ export default function ArticlesPage() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-4 right-4 bg-gray-900 text-white text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-4 right-4 bg-gray-100 text-gray-900 text-sm px-4 py-2 rounded-lg shadow-lg">
           {toast}
         </div>
       )}

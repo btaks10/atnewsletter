@@ -18,10 +18,10 @@ export default function DashboardLayout({
 
   return (
     <div>
-      <nav className="bg-white border-b border-gray-200">
+      <nav className="bg-gray-900 border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
-            <Link href="/" className="font-bold text-lg">
+            <Link href="/" className="font-bold text-lg text-gray-100">
               AT News Monitor
             </Link>
             <div className="flex gap-6">
@@ -31,8 +31,8 @@ export default function DashboardLayout({
                   href={link.href}
                   className={`text-sm ${
                     pathname === link.href
-                      ? "text-gray-900 font-medium"
-                      : "text-gray-500 hover:text-gray-900"
+                      ? "text-white font-medium"
+                      : "text-gray-400 hover:text-white"
                   }`}
                 >
                   {link.label}

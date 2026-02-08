@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { runAnalysis } from "@/lib/claude";
+import { runClustering } from "@/lib/story-clustering";
 
 export const maxDuration = 60;
 
 export async function POST() {
   try {
-    const result = await runAnalysis();
+    const result = await runClustering();
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json(

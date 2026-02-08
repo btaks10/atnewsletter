@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   "/api/ingest-gnews",
   "/api/analyze-articles",
   "/api/send-digest",
+  "/api/cluster-stories",
   "/api/auth",
   "/login",
 ];

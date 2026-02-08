@@ -8,6 +8,7 @@ interface DigestArticle {
   title: string;
   url: string;
   source: string;
+  source_type: string;
   author: string | null;
   published_at: string;
   summary: string;
@@ -67,6 +68,11 @@ function groupByCategory(articles: DigestArticle[]): Record<string, DigestArticl
 function buildEmailHtml(articles: DigestArticle[], date: string): string {
   const sources = new Set(articles.map((a) => a.source));
   const categoryCount = new Set(articles.map((a) => a.category)).size;
+  const rssCount = articles.filter((a) => a.source_type === "rss").length;
+  const gnewsCount = articles.filter((a) => a.source_type === "gnews_api").length;
+  const sourceBreakdown = gnewsCount > 0
+    ? ` (${rssCount} RSS, ${gnewsCount} via news API)`
+    : "";
   const isLargeVolume = articles.length > TOP_STORIES_LIMIT;
 
   let html = `
@@ -96,7 +102,7 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
 <body>
   <div class="header">
     <h1>Daily Antisemitism News Monitor</h1>
-    <div class="meta">${date} &bull; ${articles.length} article${articles.length !== 1 ? "s" : ""} from ${sources.size} source${sources.size !== 1 ? "s" : ""} across ${categoryCount} categor${categoryCount !== 1 ? "ies" : "y"}</div>
+    <div class="meta">${date} &bull; ${articles.length} article${articles.length !== 1 ? "s" : ""} from ${sources.size} source${sources.size !== 1 ? "s" : ""}${sourceBreakdown}</div>
   </div>`;
 
   if (isLargeVolume) {
@@ -279,6 +285,7 @@ export async function runDigest() {
         title,
         url,
         source,
+        source_type,
         author,
         published_at
       )
@@ -316,6 +323,7 @@ export async function runDigest() {
       title: row.articles.title,
       url: row.articles.url,
       source: row.articles.source,
+      source_type: row.articles.source_type || "rss",
       author: row.articles.author,
       published_at: row.articles.published_at,
       summary: row.summary,
@@ -335,6 +343,7 @@ export async function runDigest() {
           title: row.articles.title,
           url: row.articles.url,
           source: row.articles.source,
+          source_type: row.articles.source_type || "rss",
           author: row.articles.author,
           published_at: row.articles.published_at,
           summary: row.summary,
@@ -348,6 +357,7 @@ export async function runDigest() {
       title: primary.articles.title,
       url: primary.articles.url,
       source: primary.articles.source,
+      source_type: primary.articles.source_type || "rss",
       author: primary.articles.author,
       published_at: primary.articles.published_at,
       summary: primary.summary,

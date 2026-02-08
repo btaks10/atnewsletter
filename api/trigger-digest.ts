@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { RSS_FEEDS } from "../lib/config";
 import { runIngestion } from "../lib/rss";
+import { runGNewsIngestion } from "../lib/gnews";
 import { runAnalysis } from "../lib/claude";
 import { runClustering } from "../lib/story-clustering";
 import { runDigest } from "../lib/email";
@@ -30,8 +31,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startTotal = Date.now();
 
   try {
-    // Step 1: Ingest RSS feeds
-    const ingest = await runIngestion(RSS_FEEDS);
+    // Step 1: Ingest from RSS and GNews in parallel
+    const [rssResult, gnewsResult] = await Promise.allSettled([
+      runIngestion(RSS_FEEDS),
+      runGNewsIngestion(),
+    ]);
+
+    const ingest_rss =
+      rssResult.status === "fulfilled"
+        ? rssResult.value
+        : { success: false, error: rssResult.reason?.message, new_articles_inserted: 0 };
+
+    const ingest_gnews =
+      gnewsResult.status === "fulfilled"
+        ? gnewsResult.value
+        : { success: false, error: gnewsResult.reason?.message, new_articles_inserted: 0 };
 
     // Step 2: Analyze with Claude (retry if articles remain)
     let analyze;
@@ -65,7 +79,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Step 5: Log pipeline stats
     await supabase.from("pipeline_stats").insert({
       run_date: new Date().toISOString().split("T")[0],
-      articles_ingested: ingest.new_articles_inserted,
+      articles_ingested:
+        (ingest_rss.new_articles_inserted || 0) +
+        (ingest_gnews.new_articles_inserted || 0),
+      articles_from_rss: ingest_rss.new_articles_inserted || 0,
+      articles_from_gnews: ingest_gnews.new_articles_inserted || 0,
       articles_keyword_passed: analyze?.keyword_filter?.passed_filter ?? 0,
       articles_analyzed: analyze?.claude_analysis?.articles_processed ?? 0,
       articles_relevant: analyze?.claude_analysis?.articles_relevant ?? 0,
@@ -76,7 +94,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       success: true,
-      ingest,
+      ingest_rss,
+      ingest_gnews,
       analyze,
       analysis_runs: analysisRuns,
       all_articles_processed: allProcessed,
@@ -91,6 +110,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await supabase.from("pipeline_stats").insert({
       run_date: new Date().toISOString().split("T")[0],
       articles_ingested: 0,
+      articles_from_rss: 0,
+      articles_from_gnews: 0,
       articles_keyword_passed: 0,
       articles_analyzed: 0,
       articles_relevant: 0,

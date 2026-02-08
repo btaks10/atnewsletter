@@ -48,6 +48,7 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
         title: item.title || "Untitled",
         author: item.creator || item["dc:creator"] || null,
         source: feed.name,
+        source_type: "rss",
         published_at: item.pubDate
           ? new Date(item.pubDate).toISOString()
           : new Date().toISOString(),

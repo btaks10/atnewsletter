@@ -86,3 +86,40 @@ create table pipeline_stats (
   total_duration_ms integer,
   created_at timestamptz default now()
 );
+
+-- Source type tracking on articles
+alter table articles add column if not exists source_type text default 'rss';
+create index if not exists idx_articles_source_type on articles(source_type);
+
+-- Pipeline stats source breakdown
+alter table pipeline_stats add column if not exists articles_from_rss integer default 0;
+alter table pipeline_stats add column if not exists articles_from_gnews integer default 0;
+
+-- GNews query management
+create table gnews_queries (
+  id serial primary key,
+  query text not null,
+  category text,
+  is_active boolean default true,
+  priority integer default 0,
+  last_run_at timestamptz,
+  last_result_count integer default 0,
+  created_at timestamptz default now()
+);
+
+-- Seed initial GNews queries
+insert into gnews_queries (query, category, priority) values
+  ('"antisemitism"', null, 10),
+  ('"antisemitic"', null, 10),
+  ('"anti-semitism"', null, 10),
+  ('"anti-semitic"', null, 10),
+  ('"jewish" AND ("hate crime" OR "discrimination" OR "threat" OR "attack")', 'Hate Crimes & Violence', 8),
+  ('"synagogue" AND ("vandalism" OR "attack" OR "threat" OR "bomb")', 'Hate Crimes & Violence', 8),
+  ('"holocaust" AND ("denial" OR "memorial" OR "education" OR "controversy")', 'Media & Public Discourse', 7),
+  ('"anti-defamation league" OR "ADL"', 'Organizational Response', 7),
+  ('"american jewish committee" OR "AJC"', 'Organizational Response', 7),
+  ('"jewish students" AND ("campus" OR "university" OR "college")', 'Campus & Academia', 7),
+  ('"zionist" AND ("campus" OR "protest" OR "university")', 'Campus & Academia', 7),
+  ('"antisemitism" AND ("legislation" OR "executive order" OR "bill" OR "policy")', 'Government & Policy', 7),
+  ('"IHRA definition"', 'Government & Policy', 6),
+  ('"BDS" AND ("jewish" OR "israel" OR "boycott")', 'Media & Public Discourse', 5);

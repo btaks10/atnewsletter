@@ -74,7 +74,7 @@ export default function ArticlesPage() {
   const [category, setCategory] = useState("");
   const [source, setSource] = useState("");
   const [sourceType, setSourceType] = useState("");
-  const [viewMode, setViewMode] = useState<"articles" | "digest">("articles");
+  const [digestOpen, setDigestOpen] = useState(false);
   const [data, setData] = useState<ArticlesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedbackState, setFeedbackState] = useState<Record<string, string>>(
@@ -144,30 +144,8 @@ export default function ArticlesPage() {
 
   return (
     <div>
-      {/* View toggle + Filters */}
-      <div className="flex flex-wrap gap-3 mb-6 items-center">
-        <div className="flex rounded-md overflow-hidden border border-gray-700">
-          <button
-            onClick={() => setViewMode("articles")}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              viewMode === "articles"
-                ? "bg-gray-100 text-gray-900"
-                : "bg-gray-800 text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            Articles
-          </button>
-          <button
-            onClick={() => setViewMode("digest")}
-            className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-              viewMode === "digest"
-                ? "bg-gray-100 text-gray-900"
-                : "bg-gray-800 text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            TLDR Digest
-          </button>
-        </div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 mb-6">
         <input
           type="date"
           value={date}
@@ -217,7 +195,116 @@ export default function ArticlesPage() {
         </p>
       )}
 
-      {!loading && data && data.total > 0 && viewMode === "articles" && (
+      {/* TLDR Digest — collapsible card */}
+      {!loading && data && data.total > 0 && (
+        <div className="mb-6">
+          <button
+            onClick={() => setDigestOpen(!digestOpen)}
+            className="w-full flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-5 py-3 hover:bg-gray-800/70 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-gray-100">
+                TLDR Digest
+              </span>
+              <span className="text-xs text-gray-500">
+                {data.total} articles across{" "}
+                {Object.keys(data.categories).length} categories
+              </span>
+            </div>
+            <span className="text-gray-500 text-xs">
+              {digestOpen ? "Hide" : "Show"}
+            </span>
+          </button>
+
+          {digestOpen && (
+            <div className="bg-gray-900 border border-t-0 border-gray-800 rounded-b-lg px-5 pb-5 -mt-1 space-y-5">
+              {Object.entries(data.categories).map(([cat, articles]) => {
+                const grouped = groupByClusters(articles as ArticleData[]);
+                const articleCount = (articles as ArticleData[]).length;
+                return (
+                  <div key={cat}>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 pt-4 pb-2 border-b border-gray-800 mb-3">
+                      {cat}
+                      <span className="ml-2 text-gray-600 font-normal normal-case tracking-normal">
+                        {articleCount} article{articleCount !== 1 ? "s" : ""}
+                      </span>
+                    </h3>
+                    <div className="space-y-3">
+                      {grouped.map(({ primary, related }) => (
+                        <div key={primary.id} className="pl-3 border-l-2 border-gray-800">
+                          <a
+                            href={primary.articles.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-gray-100 hover:text-blue-400 leading-snug"
+                          >
+                            {primary.articles.title}
+                          </a>
+                          {primary.summary && (
+                            <p className="text-sm text-gray-400 mt-1 leading-relaxed">
+                              {primary.summary}
+                            </p>
+                          )}
+                          {related.length > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {related.length <= 3 ? (
+                                <>
+                                  {[primary, ...related].map((r, i) => (
+                                    <span key={r.id}>
+                                      {i > 0 && ", "}
+                                      <a
+                                        href={r.articles.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-400 hover:underline"
+                                      >
+                                        {r.articles.source}
+                                      </a>
+                                    </span>
+                                  ))}
+                                </>
+                              ) : (
+                                <>
+                                  {related.length + 1} sources:{" "}
+                                  {[primary, ...related.slice(0, 2)].map(
+                                    (r, i) => (
+                                      <span key={r.id}>
+                                        {i > 0 && ", "}
+                                        <a
+                                          href={r.articles.url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-400 hover:underline"
+                                        >
+                                          {r.articles.source}
+                                        </a>
+                                      </span>
+                                    )
+                                  )}
+                                  {" + "}
+                                  {related.length - 2} more
+                                </>
+                              )}
+                            </p>
+                          )}
+                          {related.length === 0 && (
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              {primary.articles.source}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Articles list */}
+      {!loading && data && data.total > 0 && (
         <div className="space-y-8">
           <p className="text-sm text-gray-400">
             {data.date} &mdash; {data.total} article
@@ -333,115 +420,6 @@ export default function ArticlesPage() {
                     </div>
                   ))}
                 </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-
-      {/* TLDR Digest View */}
-      {!loading && data && data.total > 0 && viewMode === "digest" && (
-        <div className="space-y-6">
-          <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-semibold text-gray-100">
-              Daily Digest
-            </h1>
-            <span className="text-sm text-gray-500">
-              {data.date} &mdash; {data.total} article
-              {data.total !== 1 ? "s" : ""} across{" "}
-              {Object.keys(data.categories).length} categories
-            </span>
-          </div>
-
-          {Object.entries(data.categories).map(([cat, articles]) => {
-            const grouped = groupByClusters(articles as ArticleData[]);
-            const articleCount = (articles as ArticleData[]).length;
-            return (
-              <section key={cat}>
-                <h2 className="text-sm font-semibold text-gray-200 border-b border-gray-800 pb-1.5 mb-3">
-                  {cat}{" "}
-                  <span className="text-gray-500 font-normal">
-                    ({articleCount})
-                  </span>
-                </h2>
-                <ul className="space-y-2.5 pl-1">
-                  {grouped.map(({ primary, related }) => (
-                    <li key={primary.id}>
-                      {related.length > 0 ? (
-                        <div>
-                          <a
-                            href={primary.articles.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm font-medium text-gray-100 hover:text-blue-400"
-                          >
-                            {primary.articles.title}
-                          </a>
-                          {primary.summary && (
-                            <p className="text-sm text-gray-400 mt-0.5">
-                              {primary.summary}
-                            </p>
-                          )}
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {related.length <= 3 ? (
-                              <>
-                                Also:{" "}
-                                {[primary, ...related].map((r, i) => (
-                                  <span key={r.id}>
-                                    {i > 0 && ", "}
-                                    <a
-                                      href={r.articles.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-400 hover:underline"
-                                    >
-                                      {r.articles.source}
-                                    </a>
-                                  </span>
-                                ))}
-                              </>
-                            ) : (
-                              <>
-                                Covered by {related.length + 1} sources:{" "}
-                                {[primary, ...related.slice(0, 2)].map(
-                                  (r, i) => (
-                                    <span key={r.id}>
-                                      {i > 0 && ", "}
-                                      <a
-                                        href={r.articles.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-400 hover:underline"
-                                      >
-                                        {r.articles.source}
-                                      </a>
-                                    </span>
-                                  )
-                                )}
-                                {related.length > 2 &&
-                                  ` + ${related.length - 2} more`}
-                              </>
-                            )}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="flex items-baseline gap-2">
-                          <a
-                            href={primary.articles.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-gray-200 hover:text-blue-400"
-                          >
-                            {primary.articles.title}
-                          </a>
-                          <span className="text-xs text-gray-600 shrink-0">
-                            {primary.articles.source}
-                          </span>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
               </section>
             );
           })}

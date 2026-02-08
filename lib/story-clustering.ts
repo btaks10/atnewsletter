@@ -127,11 +127,13 @@ export async function runClustering() {
   let articlesClustered = 0;
   const errors: string[] = [];
 
-  for (const [category, categoryArticles] of byCategory) {
-    // Skip categories with < 2 articles (nothing to cluster)
-    if (categoryArticles.length < 2) continue;
+  // Cluster all categories in parallel
+  const categoryEntries = [...byCategory.entries()].filter(
+    ([, arts]) => arts.length >= 2
+  );
 
-    try {
+  const clusterResults = await Promise.allSettled(
+    categoryEntries.map(async ([category, categoryArticles]) => {
       const response = await anthropic.messages.create({
         model: CLUSTERING_MODEL,
         max_tokens: 8192,
@@ -153,50 +155,56 @@ export async function runClustering() {
       try {
         clusters = JSON.parse(text);
       } catch {
-        errors.push(`${category}: JSON parse failed`);
+        throw new Error(`${category}: JSON parse failed`);
+      }
+      return { category, clusters };
+    })
+  );
+
+  // Process results and persist to DB
+  for (const result of clusterResults) {
+    if (result.status === "rejected") {
+      errors.push(result.reason?.message || String(result.reason));
+      continue;
+    }
+
+    for (const cluster of result.value.clusters) {
+      if (cluster.related_article_ids.length === 0) continue;
+
+      const primaryArticle = articleMap.get(cluster.primary_article_id);
+      if (!primaryArticle) continue;
+
+      const { data: clusterRow, error: insertErr } = await supabase
+        .from("story_clusters")
+        .insert({
+          cluster_headline: cluster.cluster_headline,
+          article_count: 1 + cluster.related_article_ids.length,
+          category: primaryArticle.category,
+        })
+        .select("id")
+        .single();
+
+      if (insertErr || !clusterRow) {
+        errors.push(`Cluster insert: ${insertErr?.message}`);
         continue;
       }
 
-      for (const cluster of clusters) {
-        if (cluster.related_article_ids.length === 0) continue;
+      const clusterId = clusterRow.id;
+      clustersCreated++;
 
-        const primaryArticle = articleMap.get(cluster.primary_article_id);
-        if (!primaryArticle) continue;
+      await supabase
+        .from("article_analysis")
+        .update({ cluster_id: clusterId, is_primary_in_cluster: true })
+        .eq("id", cluster.primary_article_id);
 
-        const { data: clusterRow, error: insertErr } = await supabase
-          .from("story_clusters")
-          .insert({
-            cluster_headline: cluster.cluster_headline,
-            article_count: 1 + cluster.related_article_ids.length,
-            category: primaryArticle.category,
-          })
-          .select("id")
-          .single();
-
-        if (insertErr || !clusterRow) {
-          errors.push(`Cluster insert: ${insertErr?.message}`);
-          continue;
-        }
-
-        const clusterId = clusterRow.id;
-        clustersCreated++;
-
+      for (const relatedId of cluster.related_article_ids) {
         await supabase
           .from("article_analysis")
-          .update({ cluster_id: clusterId, is_primary_in_cluster: true })
-          .eq("id", cluster.primary_article_id);
-
-        for (const relatedId of cluster.related_article_ids) {
-          await supabase
-            .from("article_analysis")
-            .update({ cluster_id: clusterId, is_primary_in_cluster: false })
-            .eq("id", relatedId);
-        }
-
-        articlesClustered += 1 + cluster.related_article_ids.length;
+          .update({ cluster_id: clusterId, is_primary_in_cluster: false })
+          .eq("id", relatedId);
       }
-    } catch (e: any) {
-      errors.push(`${category}: ${e?.message}`);
+
+      articlesClustered += 1 + cluster.related_article_ids.length;
     }
   }
 

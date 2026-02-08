@@ -34,7 +34,6 @@ export default function DashboardLayout({
 
   const links = [
     { href: "/", label: "Articles" },
-    { href: "/insights", label: "Insights" },
     { href: "/sources", label: "Sources" },
   ];
 

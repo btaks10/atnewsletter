@@ -114,6 +114,7 @@ export default function ArticlesPage() {
   const [source, setSource] = useState("");
   const [sourceType, setSourceType] = useState("");
   const [digestOpen, setDigestOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [data, setData] = useState<ArticlesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [feedbackState, setFeedbackState] = useState<Record<string, string>>(
@@ -202,48 +203,93 @@ export default function ArticlesPage() {
 
   return (
     <div>
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 mb-6">
+      {/* Date + Filter toggle */}
+      <div className="flex items-center gap-3 mb-4">
         <input
           type="date"
           value={date}
           onChange={(e) => setDate(e.target.value)}
           className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
         />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
+        <button
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs transition-colors border ${
+            filtersOpen || category || source || sourceType
+              ? "bg-gray-800 text-gray-100 border-gray-600"
+              : "bg-gray-900 text-gray-400 border-gray-700 hover:text-gray-200"
+          }`}
         >
-          <option value="">All Categories</option>
-          {categories.map((cat) => (
-            <option key={cat} value={cat}>
-              {cat}
-            </option>
-          ))}
-        </select>
-        <select
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
-        >
-          <option value="">All Sources</option>
-          {(data?.sources || []).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sourceType}
-          onChange={(e) => setSourceType(e.target.value)}
-          className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
-        >
-          <option value="">All Types</option>
-          <option value="rss">RSS</option>
-          <option value="gnews_api">GNews API</option>
-        </select>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-3.5 h-3.5"
+          >
+            <path
+              fillRule="evenodd"
+              d="M2.628 1.601C5.028 1.206 7.49 1 10 1s4.973.206 7.372.601a.75.75 0 0 1 .628.74v2.288a2.25 2.25 0 0 1-.659 1.59l-4.682 4.683a2.25 2.25 0 0 0-.659 1.59v3.037c0 .684-.31 1.33-.844 1.757l-1.937 1.55A.75.75 0 0 1 8 18.25v-5.757a2.25 2.25 0 0 0-.659-1.591L2.659 6.22A2.25 2.25 0 0 1 2 4.629V2.34a.75.75 0 0 1 .628-.74Z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Filters
+          {(category || source || sourceType) && (
+            <span className="bg-gray-600 text-gray-200 rounded-full px-1.5 text-[10px]">
+              {[category, source, sourceType].filter(Boolean).length}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* Expandable filters */}
+      {filtersOpen && (
+        <div className="flex flex-wrap gap-3 mb-4 pl-1">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
+          >
+            <option value="">All Categories</option>
+            {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat}
+              </option>
+            ))}
+          </select>
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
+          >
+            <option value="">All Sources</option>
+            {(data?.sources || []).map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sourceType}
+            onChange={(e) => setSourceType(e.target.value)}
+            className="border border-gray-700 rounded-md px-3 py-1.5 text-sm bg-gray-800 text-gray-100"
+          >
+            <option value="">All Types</option>
+            <option value="rss">RSS</option>
+            <option value="gnews_api">GNews API</option>
+          </select>
+          {(category || source || sourceType) && (
+            <button
+              onClick={() => {
+                setCategory("");
+                setSource("");
+                setSourceType("");
+              }}
+              className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
 
       {loading && <p className="text-gray-400 text-sm">Loading articles...</p>}
 

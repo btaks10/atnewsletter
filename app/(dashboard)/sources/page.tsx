@@ -299,7 +299,7 @@ export default function SourcesPage() {
   }
 
   function sortedKeywordsForTier(tier: "primary" | "secondary" | "context") {
-    return data.keywords
+    return data!.keywords
       .filter((k) => k.tier === tier)
       .sort((a, b) => {
         const sa = getStats(a.keyword);

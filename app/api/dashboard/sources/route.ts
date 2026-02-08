@@ -5,6 +5,9 @@ export async function GET() {
   const sevenDaysAgo = new Date(
     Date.now() - 7 * 24 * 60 * 60 * 1000
   ).toISOString();
+  const thirtyDaysAgo = new Date(
+    Date.now() - 30 * 24 * 60 * 60 * 1000
+  ).toISOString();
 
   // RSS feeds from database
   const { data: dbFeeds } = await supabase
@@ -69,9 +72,72 @@ export async function GET() {
     .order("tier")
     .order("keyword");
 
+  // Keyword stats: aggregate from articles with keyword_matches in last 30 days
+  const { data: matchedArticles } = await supabase
+    .from("articles")
+    .select("id, keyword_matches, keyword_passed, fetched_at")
+    .not("keyword_matches", "is", null)
+    .gte("fetched_at", thirtyDaysAgo);
+
+  // Get relevant article IDs for the same period
+  const { data: relevantAnalysis } = await supabase
+    .from("article_analysis")
+    .select("article_id")
+    .eq("is_relevant", true)
+    .gte("analyzed_at", thirtyDaysAgo);
+
+  const relevantIds = new Set(
+    (relevantAnalysis || []).map((a) => a.article_id)
+  );
+
+  // Aggregate keyword stats
+  const keywordStats: Record<
+    string,
+    {
+      matches_30d: number;
+      matches_7d: number;
+      relevant_matches: number;
+      last_matched: string | null;
+    }
+  > = {};
+
+  for (const article of matchedArticles || []) {
+    const kw = article.keyword_matches as {
+      keywords?: string[];
+      confidence?: string;
+    };
+    if (!kw?.keywords || kw.keywords.length === 0) continue;
+
+    const isRecent =
+      new Date(article.fetched_at) > new Date(sevenDaysAgo);
+    const isRelevant = relevantIds.has(article.id);
+
+    for (const keyword of kw.keywords) {
+      const lower = keyword.toLowerCase();
+      if (!keywordStats[lower]) {
+        keywordStats[lower] = {
+          matches_30d: 0,
+          matches_7d: 0,
+          relevant_matches: 0,
+          last_matched: null,
+        };
+      }
+      keywordStats[lower].matches_30d++;
+      if (isRecent) keywordStats[lower].matches_7d++;
+      if (isRelevant) keywordStats[lower].relevant_matches++;
+      if (
+        !keywordStats[lower].last_matched ||
+        article.fetched_at > keywordStats[lower].last_matched!
+      ) {
+        keywordStats[lower].last_matched = article.fetched_at;
+      }
+    }
+  }
+
   return NextResponse.json({
     rss_feeds: rssSources,
     gnews_queries: gnewsQueries || [],
     keywords: keywords || [],
+    keyword_stats: keywordStats,
   });
 }

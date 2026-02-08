@@ -17,23 +17,3 @@ export async function GET() {
     articles_relevant: data?.articles_relevant || 0,
   });
 }
-
-// POST: fire-and-forget pipeline trigger, returns immediately
-export async function POST() {
-  const secret = process.env.TEST_TRIGGER_SECRET;
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
-
-  // Fire and forget — trigger-digest runs as a separate serverless invocation
-  fetch(`${baseUrl}/api/trigger-digest`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-    },
-  }).catch(() => {
-    // Pipeline runs independently; errors are logged in pipeline_stats
-  });
-
-  return NextResponse.json({ status: "started" });
-}

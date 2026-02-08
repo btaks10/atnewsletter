@@ -56,21 +56,11 @@ export default function DashboardLayout({
     // Capture the sync time before triggering
     const syncBefore = lastSync;
 
-    try {
-      const res = await fetch("/api/dashboard/sync", { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        setSyncToast(`Sync failed: ${data.error}`);
-        setSyncing(false);
-        setTimeout(() => setSyncToast(null), 5000);
-        return;
-      }
-    } catch {
-      setSyncToast("Sync failed: network error");
-      setSyncing(false);
-      setTimeout(() => setSyncToast(null), 5000);
-      return;
-    }
+    // Call trigger-digest directly (cookie auth) — don't await the response
+    // since it takes ~60s. The fetch keeps the function alive on Vercel's side.
+    fetch("/api/trigger-digest", { method: "POST" })
+      .then(() => {})
+      .catch(() => {});
 
     // Poll every 10s to detect when pipeline completes (new pipeline_stats row)
     let polls = 0;

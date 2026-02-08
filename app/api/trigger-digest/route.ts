@@ -19,7 +19,21 @@ export async function POST(request: NextRequest) {
   const isBearerAuth = authHeader === `Bearer ${secret}`;
   const isCronAuth = !!cronHeader;
 
-  if (!isBearerAuth && !isCronAuth) {
+  // Also allow dashboard cookie auth
+  let isDashboardAuth = false;
+  const dashboardPassword = process.env.DASHBOARD_PASSWORD;
+  const token = request.cookies.get("atnews-auth")?.value;
+  if (dashboardPassword && token) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(dashboardPassword + (secret || "salt"));
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const expectedToken = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    isDashboardAuth = token === expectedToken;
+  }
+
+  if (!isBearerAuth && !isCronAuth && !isDashboardAuth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

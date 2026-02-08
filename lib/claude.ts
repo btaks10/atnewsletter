@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "./supabase";
 import { getArticleAgeCutoff } from "./config";
 import { filterArticleByKeywords, FilterResult } from "./keyword-filter";
+import { enrichArticleContent } from "./article-extractor";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -38,7 +39,7 @@ function buildBatchPrompt(articles: ArticleInput[]): string {
         `[ARTICLE ${i}]
 Title: ${a.title}
 Source: ${a.source}
-Content: ${truncate(a.raw_content, 500)}`
+Content: ${truncate(a.raw_content, 1500)}`
     )
     .join("\n\n");
 
@@ -59,10 +60,15 @@ An article is relevant if it substantively covers:
 - Organizational responses to antisemitism (ADL, universities, etc.)
 - Academic research or reports about antisemitism
 - Public discourse, controversies, or debates about antisemitism
+- Anti-Israel campus activity that affects Jewish students
+- Jewish community safety concerns or security measures
+- DEI policy debates with implications for Jewish communities
+- BDS campaigns, academic boycotts, or institutional actions targeting Israel
+- Holocaust education, denial, or distortion in current context
 
 An article is NOT relevant if it:
-- Merely mentions Jewish people/culture without an antisemitism angle
-- Covers general Middle East news without antisemitism focus
+- Covers general Middle East geopolitics without a Jewish/antisemitism angle
+- Is purely cultural coverage (food, holidays, art) with no discrimination angle
 - Is historical content with no current news hook
 
 For NOT relevant articles: set summary and category to null.
@@ -172,7 +178,7 @@ export async function runAnalysis() {
   const startTime = Date.now();
   const cutoff = getArticleAgeCutoff();
 
-  const { data: articles, error: fetchError } = await supabase
+  let { data: articles, error: fetchError } = await supabase
     .from("articles")
     .select("*")
     .eq("analyzed", false)
@@ -185,6 +191,7 @@ export async function runAnalysis() {
   if (!articles || articles.length === 0) {
     return {
       success: true,
+      enrichment: { attempted: 0, enriched: 0 },
       keyword_filter: {
         total_unanalyzed: 0,
         passed_filter: 0,
@@ -200,6 +207,25 @@ export async function runAnalysis() {
       },
       remaining_unanalyzed: 0,
     };
+  }
+
+  // --- Step 0: Enrich articles with full text ---
+  let enrichment = { attempted: 0, enriched: 0 };
+  try {
+    enrichment = await enrichArticleContent();
+    // Re-fetch articles to get enriched content
+    if (enrichment.enriched > 0) {
+      const { data: refreshed } = await supabase
+        .from("articles")
+        .select("*")
+        .eq("analyzed", false)
+        .gte("fetched_at", cutoff);
+      if (refreshed && refreshed.length > 0) {
+        articles = refreshed;
+      }
+    }
+  } catch (e: any) {
+    console.error("Enrichment failed, continuing with existing content:", e?.message);
   }
 
   // --- Step 1: Keyword Pre-Filter ---
@@ -321,6 +347,7 @@ export async function runAnalysis() {
 
   return {
     success: true,
+    enrichment,
     keyword_filter: keywordFilterStats,
     claude_analysis: {
       articles_processed: articlesProcessed,

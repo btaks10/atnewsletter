@@ -113,82 +113,91 @@ export async function runClustering() {
     category: row.category,
   }));
 
-  // Send to Claude Haiku for clustering
-  const response = await anthropic.messages.create({
-    model: CLUSTERING_MODEL,
-    max_tokens: 16384,
-    system:
-      "You group news articles by shared underlying story. Respond with valid JSON only, no other text.",
-    messages: [
-      {
-        role: "user",
-        content: buildClusteringPrompt(articles),
-      },
-    ],
-  });
-
-  let text =
-    response.content[0].type === "text" ? response.content[0].text : "[]";
-
-  // Strip markdown code fences if present
-  text = text.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
-
-  let clusters: ClusterResult[];
-  try {
-    clusters = JSON.parse(text);
-  } catch {
-    throw new Error(
-      `Failed to parse clustering response: ${text.slice(0, 200)}`
-    );
+  // Group articles by category and cluster each group separately
+  // (prompt already says "only cluster within same category")
+  const byCategory = new Map<string, ClusterInput[]>();
+  for (const a of articles) {
+    const cat = a.category || "Other";
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push(a);
   }
 
-  // Build a lookup from analysis_id to article info
   const articleMap = new Map(articles.map((a) => [a.analysis_id, a]));
-
   let clustersCreated = 0;
   let articlesClustered = 0;
+  const errors: string[] = [];
 
-  // Only persist multi-article clusters (single-article clusters don't need DB rows)
-  for (const cluster of clusters) {
-    if (cluster.related_article_ids.length === 0) continue;
+  for (const [category, categoryArticles] of byCategory) {
+    // Skip categories with < 2 articles (nothing to cluster)
+    if (categoryArticles.length < 2) continue;
 
-    const primaryArticle = articleMap.get(cluster.primary_article_id);
-    if (!primaryArticle) continue;
+    try {
+      const response = await anthropic.messages.create({
+        model: CLUSTERING_MODEL,
+        max_tokens: 8192,
+        system:
+          "You group news articles by shared underlying story. Respond with valid JSON only, no other text.",
+        messages: [
+          {
+            role: "user",
+            content: buildClusteringPrompt(categoryArticles),
+          },
+        ],
+      });
 
-    // Create story_clusters row
-    const { data: clusterRow, error: insertErr } = await supabase
-      .from("story_clusters")
-      .insert({
-        cluster_headline: cluster.cluster_headline,
-        article_count: 1 + cluster.related_article_ids.length,
-        category: primaryArticle.category,
-      })
-      .select("id")
-      .single();
+      let text =
+        response.content[0].type === "text" ? response.content[0].text : "[]";
+      text = text.replace(/^```(?:json)?\s*\n?/, "").replace(/\n?```\s*$/, "");
 
-    if (insertErr || !clusterRow) {
-      console.error(`Cluster insert error: ${insertErr?.message}`);
-      continue;
+      let clusters: ClusterResult[];
+      try {
+        clusters = JSON.parse(text);
+      } catch {
+        errors.push(`${category}: JSON parse failed`);
+        continue;
+      }
+
+      for (const cluster of clusters) {
+        if (cluster.related_article_ids.length === 0) continue;
+
+        const primaryArticle = articleMap.get(cluster.primary_article_id);
+        if (!primaryArticle) continue;
+
+        const { data: clusterRow, error: insertErr } = await supabase
+          .from("story_clusters")
+          .insert({
+            cluster_headline: cluster.cluster_headline,
+            article_count: 1 + cluster.related_article_ids.length,
+            category: primaryArticle.category,
+          })
+          .select("id")
+          .single();
+
+        if (insertErr || !clusterRow) {
+          errors.push(`Cluster insert: ${insertErr?.message}`);
+          continue;
+        }
+
+        const clusterId = clusterRow.id;
+        clustersCreated++;
+
+        await supabase
+          .from("article_analysis")
+          .update({ cluster_id: clusterId, is_primary_in_cluster: true })
+          .eq("id", cluster.primary_article_id);
+
+        for (const relatedId of cluster.related_article_ids) {
+          await supabase
+            .from("article_analysis")
+            .update({ cluster_id: clusterId, is_primary_in_cluster: false })
+            .eq("id", relatedId);
+        }
+
+        articlesClustered += 1 + cluster.related_article_ids.length;
+      }
+    } catch (e: any) {
+      errors.push(`${category}: ${e?.message}`);
     }
-
-    const clusterId = clusterRow.id;
-    clustersCreated++;
-
-    // Update primary article's analysis row
-    await supabase
-      .from("article_analysis")
-      .update({ cluster_id: clusterId, is_primary_in_cluster: true })
-      .eq("id", cluster.primary_article_id);
-
-    // Update related articles' analysis rows
-    for (const relatedId of cluster.related_article_ids) {
-      await supabase
-        .from("article_analysis")
-        .update({ cluster_id: clusterId, is_primary_in_cluster: false })
-        .eq("id", relatedId);
-    }
-
-    articlesClustered += 1 + cluster.related_article_ids.length;
   }
 
   return {
@@ -196,5 +205,7 @@ export async function runClustering() {
     clusters_created: clustersCreated,
     articles_clustered: articlesClustered,
     total_relevant: articles.length,
+    categories_processed: byCategory.size,
+    ...(errors.length > 0 ? { errors } : {}),
   };
 }

@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { supabase } from "./supabase";
+import { filterArticleByKeywords, FilterResult } from "./keyword-filter";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -92,10 +93,126 @@ export async function runAnalysis() {
   if (!articles || articles.length === 0) {
     return {
       success: true,
-      articles_processed: 0,
-      articles_relevant: 0,
-      articles_not_relevant: 0,
-      errors: [],
+      keyword_filter: {
+        total_unanalyzed: 0,
+        passed_filter: 0,
+        skipped: 0,
+        high_confidence: 0,
+        medium_confidence: 0,
+      },
+      claude_analysis: {
+        articles_processed: 0,
+        articles_relevant: 0,
+        articles_not_relevant: 0,
+        errors: [],
+      },
+    };
+  }
+
+  // --- Step 1: Keyword Pre-Filter ---
+  let filterResults: Map<string, FilterResult>;
+  let passedArticles: typeof articles;
+  let skippedArticles: typeof articles;
+  let highConfidence = 0;
+  let mediumConfidence = 0;
+
+  try {
+    filterResults = new Map();
+    for (const article of articles) {
+      const result = filterArticleByKeywords({
+        title: article.title,
+        raw_content: article.raw_content,
+      });
+      filterResults.set(article.id, result);
+    }
+
+    passedArticles = articles.filter(
+      (a) => filterResults.get(a.id)!.passFilter
+    );
+    skippedArticles = articles.filter(
+      (a) => !filterResults.get(a.id)!.passFilter
+    );
+
+    for (const result of filterResults.values()) {
+      if (result.confidence === "high") highConfidence++;
+      else if (result.confidence === "medium") mediumConfidence++;
+    }
+
+    // Save keyword filter results to DB (jsonb varies per article, so update individually)
+    await Promise.all(
+      articles.map((article) => {
+        const result = filterResults.get(article.id)!;
+        return supabase
+          .from("articles")
+          .update({
+            keyword_passed: result.passFilter,
+            keyword_matches: {
+              keywords: result.matchedKeywords,
+              confidence: result.confidence,
+              reason: result.reason,
+            },
+          })
+          .eq("id", article.id);
+      })
+    );
+
+    // Mark skipped articles as analyzed with is_relevant = false
+    if (skippedArticles.length > 0) {
+      const skipAnalysisRows = skippedArticles.map((a) => ({
+        article_id: a.id,
+        is_relevant: false,
+        summary: null,
+        category: null,
+        model_used: "keyword-filter",
+      }));
+
+      const { error: skipInsertErr } = await supabase
+        .from("article_analysis")
+        .insert(skipAnalysisRows);
+
+      if (skipInsertErr) {
+        console.error(`Skip insert error: ${skipInsertErr.message}`);
+      }
+
+      const skipIds = skippedArticles.map((a) => a.id);
+      const { error: skipUpdateErr } = await supabase
+        .from("articles")
+        .update({ analyzed: true })
+        .in("id", skipIds);
+
+      if (skipUpdateErr) {
+        console.error(`Skip update error: ${skipUpdateErr.message}`);
+      }
+    }
+  } catch (filterError: any) {
+    // Fail open: if keyword filter errors, send everything to Claude
+    console.error(`Keyword filter error, falling back to full analysis: ${filterError?.message}`);
+    passedArticles = articles;
+    skippedArticles = [];
+    highConfidence = 0;
+    mediumConfidence = 0;
+    filterResults = new Map();
+  }
+
+  const keywordFilterStats = {
+    total_unanalyzed: articles.length,
+    passed_filter: passedArticles.length,
+    skipped: skippedArticles.length,
+    high_confidence: highConfidence,
+    medium_confidence: mediumConfidence,
+  };
+
+  // --- Step 2: Claude Analysis (only on articles that passed filter) ---
+  if (passedArticles.length === 0) {
+    return {
+      success: true,
+      keyword_filter: keywordFilterStats,
+      claude_analysis: {
+        articles_processed: 0,
+        articles_relevant: 0,
+        articles_not_relevant: 0,
+        errors: [],
+      },
     };
   }
 
@@ -103,7 +220,7 @@ export async function runAnalysis() {
   let relevant = 0;
   let notRelevant = 0;
 
-  // Send ALL articles in a single Claude API call
+  // Send only filtered articles to Claude
   const response = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 16384,
@@ -113,7 +230,7 @@ export async function runAnalysis() {
       {
         role: "user",
         content: buildBatchPrompt(
-          articles.map((a) => ({
+          passedArticles.map((a) => ({
             id: a.id,
             title: a.title,
             source: a.source,
@@ -142,7 +259,7 @@ export async function runAnalysis() {
   const analyzedIds: string[] = [];
 
   for (const result of results) {
-    const article = articles[result.index];
+    const article = passedArticles[result.index];
     if (!article) {
       errors.push(`Invalid index ${result.index} in Claude response`);
       continue;
@@ -190,9 +307,12 @@ export async function runAnalysis() {
 
   return {
     success: true,
-    articles_processed: articles.length,
-    articles_relevant: relevant,
-    articles_not_relevant: notRelevant,
-    errors,
+    keyword_filter: keywordFilterStats,
+    claude_analysis: {
+      articles_processed: passedArticles.length,
+      articles_relevant: relevant,
+      articles_not_relevant: notRelevant,
+      errors,
+    },
   };
 }

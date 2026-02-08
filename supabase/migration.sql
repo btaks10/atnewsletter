@@ -34,6 +34,10 @@ create table article_analysis (
 create index idx_article_analysis_relevant on article_analysis (is_relevant) where is_relevant = true;
 create index idx_article_analysis_analyzed_at on article_analysis (analyzed_at);
 
+-- Keyword filter columns on articles table (added for pre-filter step)
+alter table articles add column if not exists keyword_passed boolean;
+alter table articles add column if not exists keyword_matches jsonb;
+
 -- Ingest logs table: tracks RSS feed processing results
 create table ingest_logs (
   id uuid primary key default uuid_generate_v4(),

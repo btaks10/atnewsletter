@@ -15,6 +15,12 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
+const SYNC_STAGES = [
+  { url: "/api/ingest-articles", label: "Ingesting RSS feeds..." },
+  { url: "/api/ingest-gnews", label: "Querying GNews API..." },
+  { url: "/api/analyze-articles", label: "Analyzing articles with Claude..." },
+];
+
 export default function DashboardLayout({
   children,
 }: {
@@ -24,7 +30,7 @@ export default function DashboardLayout({
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [syncToast, setSyncToast] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef(false);
 
   const links = [
     { href: "/", label: "Articles" },
@@ -37,53 +43,68 @@ export default function DashboardLayout({
       .then((res) => res.json())
       .then((data) => {
         if (data.last_sync) setLastSync(data.last_sync);
-        return data.last_sync;
+        return data;
       })
       .catch(() => null);
   }, []);
 
   useEffect(() => {
     fetchLastSync();
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
   }, [fetchLastSync]);
 
   async function handleSync() {
     setSyncing(true);
-    setSyncToast("Pipeline started — this takes about a minute...");
+    abortRef.current = false;
 
-    // Capture the sync time before triggering
-    const syncBefore = lastSync;
+    const startTime = Date.now();
+    let totalNew = 0;
+    let totalRelevant = 0;
 
-    // Call trigger-digest directly (cookie auth) — don't await the response
-    // since it takes ~60s. The fetch keeps the function alive on Vercel's side.
-    fetch("/api/trigger-digest", { method: "POST" })
-      .then(() => {})
-      .catch(() => {});
+    for (const stage of SYNC_STAGES) {
+      if (abortRef.current) break;
+      setSyncToast(stage.label);
 
-    // Poll every 10s to detect when pipeline completes (new pipeline_stats row)
-    let polls = 0;
-    pollRef.current = setInterval(async () => {
-      polls++;
-      const newSync = await fetchLastSync();
+      try {
+        const res = await fetch(stage.url, { method: "POST" });
+        const data = await res.json();
 
-      if (newSync && newSync !== syncBefore) {
-        // Pipeline completed — new stats row appeared
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
+        if (!res.ok) {
+          setSyncToast(`Failed at: ${stage.label} — ${data.error || "unknown error"}`);
+          setSyncing(false);
+          setTimeout(() => setSyncToast(null), 8000);
+          return;
+        }
+
+        // Collect stats from each stage
+        if (data.new_articles_inserted) totalNew += data.new_articles_inserted;
+        if (data.claude_analysis?.articles_relevant) {
+          totalRelevant += data.claude_analysis.articles_relevant;
+        }
+      } catch {
+        setSyncToast(`Failed at: ${stage.label} — network error`);
         setSyncing(false);
-        setSyncToast("Sync complete — refresh the page to see new articles");
         setTimeout(() => setSyncToast(null), 8000);
-      } else if (polls >= 18) {
-        // 3 minutes max wait
-        if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = null;
-        setSyncing(false);
-        setSyncToast("Sync is still running — check back shortly");
-        setTimeout(() => setSyncToast(null), 8000);
+        return;
       }
-    }, 10000);
+    }
+
+    // Log pipeline stats so "Last sync" updates
+    await fetch("/api/dashboard/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        articles_ingested: totalNew,
+        articles_relevant: totalRelevant,
+        duration_ms: Date.now() - startTime,
+      }),
+    }).catch(() => {});
+
+    fetchLastSync();
+    setSyncing(false);
+    setSyncToast(
+      `Sync complete — ${totalNew} new articles, ${totalRelevant} relevant`
+    );
+    setTimeout(() => setSyncToast(null), 8000);
   }
 
   return (
@@ -136,7 +157,7 @@ export default function DashboardLayout({
 
       {/* Sync toast */}
       {syncToast && (
-        <div className="fixed bottom-4 right-4 bg-gray-100 text-gray-900 text-sm px-4 py-2 rounded-lg shadow-lg z-50">
+        <div className="fixed bottom-4 right-4 bg-gray-100 text-gray-900 text-sm px-4 py-2 rounded-lg shadow-lg z-50 max-w-sm">
           {syncToast}
         </div>
       )}

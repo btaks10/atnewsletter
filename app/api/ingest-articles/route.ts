@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getActiveFeeds } from "@/lib/config";
 import { runIngestion } from "@/lib/rss";
 
+export const maxDuration = 60;
+
 export async function POST() {
   try {
     const feeds = await getActiveFeeds();

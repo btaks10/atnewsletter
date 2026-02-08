@@ -338,3 +338,110 @@ insert into keyword_config (keyword, tier) values
   ('viral', 'context'),
   ('trending', 'context')
 on conflict (keyword, tier) do nothing;
+
+-- =============================================================
+-- Sprint 5: Source Expansion (GNews Essentials + new RSS feeds)
+-- =============================================================
+
+-- New RSS feeds: restored Jewish media + mainstream + campus papers
+insert into rss_feeds (name, url, type) values
+  -- Restored Jewish media
+  ('Times of Israel', 'https://www.timesofisrael.com/feed/', 'jewish_media'),
+  ('Haaretz', 'https://www.haaretz.com/srv/haaretz-latest-headlines', 'jewish_media'),
+  ('Haaretz - Israel', 'https://www.haaretz.com/srv/israel-news-rss', 'jewish_media'),
+  ('Haaretz - US', 'https://www.haaretz.com/srv/u.s.-news-rss', 'jewish_media'),
+  -- New mainstream
+  ('Politico', 'https://rss.politico.com/politics-news.xml', 'mainstream'),
+  ('Politico - Congress', 'https://rss.politico.com/congress.xml', 'mainstream'),
+  ('The Hill', 'https://thehill.com/news/feed/', 'mainstream'),
+  ('Newsweek', 'https://www.newsweek.com/rss', 'mainstream'),
+  ('ProPublica', 'https://www.propublica.org/feeds/propublica/main', 'mainstream'),
+  ('Daily Beast', 'https://www.thedailybeast.com/arc/outboundfeeds/rss/articles/', 'mainstream'),
+  ('AP News', 'https://feedx.net/rss/ap.xml', 'mainstream'),
+  -- Campus newspapers
+  ('Columbia Spectator', 'https://www.columbiaspectator.com/arc/outboundfeeds/rss/?outputType=xml', 'mainstream'),
+  ('Michigan Daily', 'https://www.michigandaily.com/feed/', 'mainstream'),
+  ('Stanford Daily', 'https://stanforddaily.com/feed/', 'mainstream'),
+  ('NYU News', 'https://nyunews.com/feed/', 'mainstream'),
+  ('Cornell Daily Sun', 'https://www.cornellsun.com/plugin/feeds/all.xml', 'mainstream')
+on conflict (url) do nothing;
+
+-- Expanded GNews queries for Essentials plan (1,000 requests/day, 25 articles each)
+
+-- Hate Crimes & Violence: broader net
+insert into gnews_queries (query, category, priority) values
+  ('"antisemitic attack" OR "antisemitic assault"', 'Hate Crimes & Violence', 9),
+  ('"antisemitic threat" OR "antisemitic threats"', 'Hate Crimes & Violence', 8),
+  ('"jewish hate crime" OR "hate crime jewish"', 'Hate Crimes & Violence', 8),
+  ('"synagogue vandalism" OR "synagogue attack" OR "synagogue threat"', 'Hate Crimes & Violence', 8),
+  ('"jewish cemetery" AND ("vandalism" OR "desecration" OR "damage")', 'Hate Crimes & Violence', 7),
+  ('"mezuzah" AND ("ripped" OR "torn" OR "vandalism" OR "removed")', 'Hate Crimes & Violence', 7),
+  ('"menorah" AND ("vandalism" OR "destroyed" OR "damaged")', 'Hate Crimes & Violence', 7),
+  ('"kosher" AND ("attack" OR "vandalism" OR "threat" OR "arson")', 'Hate Crimes & Violence', 6),
+  ('"jewish" AND ("stabbing" OR "shooting" OR "bombing" OR "arson")', 'Hate Crimes & Violence', 8),
+  ('"antisemitic incident" OR "antisemitic incidents"', 'Hate Crimes & Violence', 8),
+  ('"anti-jewish" AND ("attack" OR "violence" OR "hate")', 'Hate Crimes & Violence', 7),
+
+  -- Campus & Academia: biggest coverage gap
+  ('"antisemitism" AND "campus"', 'Campus & Academia', 8),
+  ('"antisemitism" AND "university"', 'Campus & Academia', 8),
+  ('"jewish students" AND ("harassed" OR "threatened" OR "unsafe" OR "hostile")', 'Campus & Academia', 8),
+  ('"antisemitic" AND ("professor" OR "faculty" OR "instructor")', 'Campus & Academia', 7),
+  ('"SJP" AND ("jewish" OR "antisemitic" OR "zionist")', 'Campus & Academia', 7),
+  ('"students for justice in palestine" AND ("jewish" OR "antisemitic")', 'Campus & Academia', 6),
+  ('"campus antisemitism" OR "university antisemitism"', 'Campus & Academia', 8),
+  ('"hillel" AND ("campus" OR "university" OR "antisemitism")', 'Campus & Academia', 6),
+  ('"academic boycott" AND ("israel" OR "jewish")', 'Campus & Academia', 6),
+  ('"Title VI" AND ("antisemitism" OR "jewish")', 'Campus & Academia', 7),
+  ('"jewish" AND ("fraternity" OR "sorority") AND ("vandalism" OR "attack" OR "targeted")', 'Campus & Academia', 6),
+
+  -- Government & Policy
+  ('"antisemitism" AND ("legislation" OR "bill" OR "law" OR "act")', 'Government & Policy', 7),
+  ('"antisemitism" AND ("executive order" OR "White House" OR "Biden" OR "Trump")', 'Government & Policy', 8),
+  ('"IHRA definition" AND "antisemitism"', 'Government & Policy', 7),
+  ('"antisemitism envoy" OR "antisemitism coordinator" OR "antisemitism czar"', 'Government & Policy', 7),
+  ('"congress" AND "antisemitism"', 'Government & Policy', 7),
+  ('"state department" AND "antisemitism"', 'Government & Policy', 6),
+  ('"antisemitism task force" OR "antisemitism commission"', 'Government & Policy', 6),
+  ('"FBI" AND ("antisemitism" OR "antisemitic" OR "jewish hate crime")', 'Government & Policy', 7),
+
+  -- Legal & Civil Rights
+  ('"antisemitism" AND ("lawsuit" OR "sued" OR "litigation")', 'Legal & Civil Rights', 7),
+  ('"jewish" AND "discrimination" AND ("employment" OR "workplace" OR "fired")', 'Legal & Civil Rights', 6),
+  ('"jewish" AND ("civil rights" OR "civil liberties") AND ("violation" OR "complaint")', 'Legal & Civil Rights', 6),
+  ('"Brandeis Center" AND ("antisemitism" OR "discrimination" OR "jewish")', 'Legal & Civil Rights', 6),
+
+  -- Organizational Response
+  ('"ADL" AND ("antisemitism" OR "report" OR "audit" OR "data")', 'Organizational Response', 7),
+  ('"AJC" AND ("antisemitism" OR "survey" OR "report")', 'Organizational Response', 6),
+  ('"jewish federation" AND ("antisemitism" OR "security" OR "hate")', 'Organizational Response', 6),
+  ('"StandWithUs" AND ("antisemitism" OR "campus" OR "jewish")', 'Organizational Response', 5),
+  ('"Hillel International" AND ("antisemitism" OR "jewish students")', 'Organizational Response', 5),
+  ('"jewish security" OR "synagogue security" OR "jewish community security"', 'Organizational Response', 7),
+
+  -- Media & Public Discourse
+  ('"antisemitic trope" OR "antisemitic tropes"', 'Media & Public Discourse', 7),
+  ('"antisemitic conspiracy" OR "jewish conspiracy"', 'Media & Public Discourse', 7),
+  ('"antisemitism" AND ("social media" OR "Twitter" OR "X" OR "TikTok" OR "Instagram")', 'Media & Public Discourse', 7),
+  ('"antisemitic" AND ("celebrity" OR "influencer" OR "rapper" OR "athlete")', 'Media & Public Discourse', 7),
+  ('"antisemitic remarks" OR "antisemitic comments" OR "antisemitic speech"', 'Media & Public Discourse', 7),
+  ('"antisemitic cartoon" OR "antisemitic meme" OR "antisemitic imagery"', 'Media & Public Discourse', 6),
+  ('"anti-zionism" AND "antisemitism"', 'Media & Public Discourse', 6),
+  ('"BDS" AND ("antisemitic" OR "antisemitism" OR "jewish")', 'Media & Public Discourse', 6),
+
+  -- International
+  ('"antisemitism" AND "Europe"', 'International', 7),
+  ('"antisemitism" AND ("UK" OR "Britain" OR "United Kingdom" OR "London")', 'International', 7),
+  ('"antisemitism" AND ("France" OR "Paris")', 'International', 7),
+  ('"antisemitism" AND ("Germany" OR "Berlin")', 'International', 7),
+  ('"antisemitism" AND "Canada"', 'International', 6),
+  ('"antisemitism" AND ("Australia" OR "Melbourne" OR "Sydney")', 'International', 6),
+  ('"antisemitism" AND ("Latin America" OR "Argentina" OR "Brazil")', 'International', 5),
+  ('"jewish" AND ("attack" OR "targeted") AND ("Europe" OR "UK" OR "France" OR "Germany")', 'International', 7),
+
+  -- Broader catch-all queries
+  ('"antisemitism report" OR "antisemitism data" OR "antisemitism statistics"', 'Organizational Response', 7),
+  ('"rise in antisemitism" OR "surge in antisemitism" OR "spike in antisemitism"', 'Other', 8),
+  ('"combating antisemitism" OR "fighting antisemitism" OR "addressing antisemitism"', 'Other', 6),
+  ('"antisemitism awareness" OR "antisemitism education" OR "Holocaust education"', 'Other', 6)
+on conflict do nothing;

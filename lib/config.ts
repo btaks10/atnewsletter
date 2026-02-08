@@ -9,11 +9,11 @@ export const RSS_FEEDS: FeedSource[] = [
   { name: "Jewish Insider", url: "https://jewishinsider.com/feed/", type: "jewish_media" },
   { name: "JTA", url: "https://www.jta.org/feed", type: "jewish_media" },
   { name: "Forward", url: "https://forward.com/feed/", type: "jewish_media" },
-  // { name: "Times of Israel", url: "https://www.timesofisrael.com/feed/", type: "jewish_media" }, // Feed returns 403
+  { name: "Times of Israel", url: "https://www.timesofisrael.com/feed/", type: "jewish_media" },
   { name: "Jerusalem Post", url: "https://www.jpost.com/rss/rssfeedsfrontpage.aspx", type: "jewish_media" },
-  // { name: "Haaretz", url: "https://www.haaretz.com/cmlink/1.628752", type: "jewish_media" }, // Feed returns 405
+  { name: "Haaretz", url: "https://www.haaretz.com/srv/haaretz-latest-headlines", type: "jewish_media" },
   { name: "Algemeiner", url: "https://www.algemeiner.com/feed/", type: "jewish_media" },
-  // { name: "Tablet Magazine", url: "https://www.tabletmag.com/feed", type: "jewish_media" }, // Feed returns 403
+  // { name: "Tablet Magazine", url: "https://www.tabletmag.com/feed", type: "jewish_media" }, // Cloudflare blocks
 
   // New York Times (homepage + topic-specific)
   { name: "NYT - Home", url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", type: "mainstream" },
@@ -68,6 +68,19 @@ export const RSS_FEEDS: FeedSource[] = [
   // Other mainstream
   { name: "NY Post", url: "https://nypost.com/feed/", type: "mainstream" },
   { name: "The Atlantic", url: "https://www.theatlantic.com/feed/all/", type: "mainstream" },
+  { name: "Politico", url: "https://rss.politico.com/politics-news.xml", type: "mainstream" },
+  { name: "The Hill", url: "https://thehill.com/news/feed/", type: "mainstream" },
+  { name: "Newsweek", url: "https://www.newsweek.com/rss", type: "mainstream" },
+  { name: "ProPublica", url: "https://www.propublica.org/feeds/propublica/main", type: "mainstream" },
+  { name: "Daily Beast", url: "https://www.thedailybeast.com/arc/outboundfeeds/rss/articles/", type: "mainstream" },
+  { name: "AP News", url: "https://feedx.net/rss/ap.xml", type: "mainstream" },
+
+  // Campus newspapers
+  { name: "Columbia Spectator", url: "https://www.columbiaspectator.com/arc/outboundfeeds/rss/?outputType=xml", type: "mainstream" },
+  { name: "Michigan Daily", url: "https://www.michigandaily.com/feed/", type: "mainstream" },
+  { name: "Stanford Daily", url: "https://stanforddaily.com/feed/", type: "mainstream" },
+  { name: "NYU News", url: "https://nyunews.com/feed/", type: "mainstream" },
+  { name: "Cornell Daily Sun", url: "https://www.cornellsun.com/plugin/feeds/all.xml", type: "mainstream" },
 
   // Opinion / Analysis
   { name: "Guardian - Opinion", url: "https://www.theguardian.com/commentisfree/rss", type: "analysis" },

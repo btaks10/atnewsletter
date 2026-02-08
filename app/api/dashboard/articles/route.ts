@@ -100,16 +100,23 @@ export async function GET(request: NextRequest) {
   ].sort();
 
   // Count total articles analyzed that day (relevant + not relevant)
-  const { count: totalAnalyzed } = await supabase
-    .from("article_analysis")
-    .select("id", { count: "exact", head: true })
-    .gte("analyzed_at", startOfDay)
-    .lte("analyzed_at", endOfDay);
+  let totalAnalyzed = 0;
+  try {
+    const { count } = await supabase
+      .from("article_analysis")
+      .select("*", { count: "exact", head: true })
+      .gte("analyzed_at", startOfDay)
+      .lte("analyzed_at", endOfDay);
+    totalAnalyzed = count || 0;
+  } catch {
+    // Fallback: just use the relevant count
+    totalAnalyzed = data?.length || 0;
+  }
 
   return NextResponse.json({
     date,
     total: data?.length || 0,
-    total_analyzed: totalAnalyzed || 0,
+    total_analyzed: totalAnalyzed,
     sources,
     categories: grouped,
   });

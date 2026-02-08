@@ -1,23 +1,18 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { RSS_FEEDS } from "../lib/config";
-import { runIngestion } from "../lib/rss";
-import { runAnalysis } from "../lib/claude";
-import { runClustering } from "../lib/story-clustering";
+import { NextRequest, NextResponse } from "next/server";
+import { RSS_FEEDS } from "@/lib/config";
+import { runIngestion } from "@/lib/rss";
+import { runAnalysis } from "@/lib/claude";
+import { runClustering } from "@/lib/story-clustering";
 
-export const config = { maxDuration: 60 };
+export const maxDuration = 60;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // Only allow cron or authenticated requests
-  const authHeader = req.headers["authorization"];
-  const cronHeader = req.headers["x-vercel-cron-signature"];
+export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const cronHeader = request.headers.get("x-vercel-cron-signature");
   const secret = process.env.TEST_TRIGGER_SECRET;
 
   if (authHeader !== `Bearer ${secret}` && !cronHeader) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const start = Date.now();
@@ -46,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       clustering = { skipped: true, reason: `Error: ${err?.message}` };
     }
 
-    return res.status(200).json({
+    return NextResponse.json({
       success: true,
       ingest,
       analyze,
@@ -56,10 +51,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       duration_ms: Date.now() - start,
     });
   } catch (err: any) {
-    return res.status(500).json({
-      success: false,
-      error: err?.message || String(err),
-      duration_ms: Date.now() - start,
-    });
+    return NextResponse.json(
+      { success: false, error: err?.message || String(err), duration_ms: Date.now() - start },
+      { status: 500 }
+    );
   }
 }

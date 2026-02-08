@@ -1,31 +1,26 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { RSS_FEEDS } from "../lib/config";
-import { runIngestion } from "../lib/rss";
-import { runGNewsIngestion } from "../lib/gnews";
-import { runAnalysis } from "../lib/claude";
-import { runClustering } from "../lib/story-clustering";
-import { runDigest } from "../lib/email";
-import { supabase } from "../lib/supabase";
+import { NextRequest, NextResponse } from "next/server";
+import { RSS_FEEDS } from "@/lib/config";
+import { runIngestion } from "@/lib/rss";
+import { runGNewsIngestion } from "@/lib/gnews";
+import { runAnalysis } from "@/lib/claude";
+import { runClustering } from "@/lib/story-clustering";
+import { runDigest } from "@/lib/email";
+import { supabase } from "@/lib/supabase";
 
-export const config = { maxDuration: 60 };
+export const maxDuration = 60;
 
 const MAX_ANALYSIS_RETRIES = 3;
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // Auth: accept either Bearer token or Vercel cron header
-  const authHeader = req.headers["authorization"];
-  const cronHeader = req.headers["x-vercel-cron-signature"];
+export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  const cronHeader = request.headers.get("x-vercel-cron-signature");
   const secret = process.env.TEST_TRIGGER_SECRET;
 
   const isBearerAuth = authHeader === `Bearer ${secret}`;
   const isCronAuth = !!cronHeader;
 
   if (!isBearerAuth && !isCronAuth) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const startTotal = Date.now();
@@ -92,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       total_duration_ms: totalDuration,
     });
 
-    return res.status(200).json({
+    return NextResponse.json({
       success: true,
       ingest_rss,
       ingest_gnews,
@@ -106,7 +101,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err: any) {
     const totalDuration = Date.now() - startTotal;
 
-    // Log failed pipeline run
     await supabase.from("pipeline_stats").insert({
       run_date: new Date().toISOString().split("T")[0],
       articles_ingested: 0,
@@ -120,10 +114,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       total_duration_ms: totalDuration,
     });
 
-    return res.status(500).json({
-      success: false,
-      error: err?.message || String(err),
-      total_duration_ms: totalDuration,
-    });
+    return NextResponse.json(
+      { success: false, error: err?.message || String(err), total_duration_ms: totalDuration },
+      { status: 500 }
+    );
   }
 }

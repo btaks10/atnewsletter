@@ -1,11 +1,5 @@
 {
-  "buildCommand": "",
-  "outputDirectory": "",
-  "functions": {
-    "api/*.ts": {
-      "maxDuration": 60
-    }
-  },
+  "framework": "nextjs",
   "crons": [
     {
       "path": "/api/trigger-digest",

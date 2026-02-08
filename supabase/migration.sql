@@ -123,3 +123,32 @@ insert into gnews_queries (query, category, priority) values
   ('"antisemitism" AND ("legislation" OR "executive order" OR "bill" OR "policy")', 'Government & Policy', 7),
   ('"IHRA definition"', 'Government & Policy', 6),
   ('"BDS" AND ("jewish" OR "israel" OR "boycott")', 'Media & Public Discourse', 5);
+
+-- Sprint 3: Dashboard support
+
+-- Article feedback table
+create table if not exists article_feedback (
+  id serial primary key,
+  article_id uuid not null references articles(id) on delete cascade,
+  feedback text not null check (feedback in ('relevant', 'not_relevant')),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists idx_feedback_article on article_feedback(article_id);
+
+-- Expanded GNews queries
+insert into gnews_queries (query, category, priority) values
+  ('"jewish community" AND ("threat" OR "concern" OR "safety" OR "fear")', 'Hate Crimes & Violence', 7),
+  ('"hate speech" AND ("jewish" OR "synagogue" OR "antisemitic")', 'Hate Crimes & Violence', 7),
+  ('"white supremacy" AND ("jewish" OR "antisemitic" OR "synagogue")', 'Hate Crimes & Violence', 7),
+  ('"campus protest" AND ("jewish" OR "zionist" OR "israel")', 'Campus & Academia', 7),
+  ('"neo-nazi" OR "neo nazi"', 'Hate Crimes & Violence', 8),
+  ('"swastika" AND ("graffiti" OR "vandalism" OR "found" OR "painted")', 'Hate Crimes & Violence', 8),
+  ('"holocaust denial" OR "holocaust denier"', 'Media & Public Discourse', 7),
+  ('"from the river to the sea"', 'Media & Public Discourse', 6),
+  ('"dual loyalty" AND ("jewish" OR "israel")', 'Media & Public Discourse', 6),
+  ('"jewish students" AND ("safety" OR "threat" OR "fear" OR "harassed")', 'Campus & Academia', 7),
+  ('"synagogue" AND ("security" OR "police" OR "protection" OR "guard")', 'Organizational Response', 6),
+  ('"SPLC" AND ("antisemitism" OR "hate group")', 'Organizational Response', 6);

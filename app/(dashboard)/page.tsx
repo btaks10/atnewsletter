@@ -321,9 +321,14 @@ export default function ArticlesPage() {
                             {group.related.length + 1}x
                           </span>
                           <div className="min-w-0">
-                            <p className="text-sm text-gray-200 leading-snug">
+                            <a
+                              href={group.primary.articles.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-gray-200 leading-snug hover:text-blue-400 transition-colors"
+                            >
                               {group.primary.summary || group.primary.articles.title}
-                            </p>
+                            </a>
                             <p className="text-xs text-gray-500 mt-0.5">
                               {category}
                             </p>

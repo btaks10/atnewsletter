@@ -116,7 +116,7 @@ export async function runClustering() {
   // Send to Claude Haiku for clustering
   const response = await anthropic.messages.create({
     model: CLUSTERING_MODEL,
-    max_tokens: 4096,
+    max_tokens: 16384,
     system:
       "You group news articles by shared underlying story. Respond with valid JSON only, no other text.",
     messages: [

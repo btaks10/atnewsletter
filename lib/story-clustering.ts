@@ -87,6 +87,7 @@ export async function runClustering() {
     `
     )
     .eq("is_relevant", true)
+    .is("cluster_id", null)
     .gte("analyzed_at", cutoff);
 
   if (fetchError) {

@@ -38,7 +38,7 @@ async function fetchGNews(
   const params = new URLSearchParams({
     q: query,
     lang: "en",
-    max: "25",
+    max: "100",
     sortby: "publishedAt",
     from: fromDate,
     apikey: apiKey,

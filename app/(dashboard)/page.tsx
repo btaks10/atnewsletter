@@ -154,18 +154,37 @@ export default function ArticlesPage() {
   }, [fetchArticles]);
 
   async function handleFeedback(articleId: string, feedback: string) {
-    setFeedbackState((prev) => ({ ...prev, [articleId]: feedback }));
+    const isUndo = feedbackState[articleId] === feedback;
+
+    setFeedbackState((prev) => {
+      const next = { ...prev };
+      if (isUndo) {
+        delete next[articleId];
+      } else {
+        next[articleId] = feedback;
+      }
+      return next;
+    });
 
     try {
-      await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ article_id: articleId, feedback }),
-      });
-      setToast("Feedback saved");
+      if (isUndo) {
+        await fetch("/api/feedback", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ article_id: articleId }),
+        });
+        setToast("Feedback removed");
+      } else {
+        await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ article_id: articleId, feedback }),
+        });
+        setToast("Feedback saved");
+      }
       setTimeout(() => setToast(""), 2000);
     } catch {
-      setToast("Failed to save feedback");
+      setToast("Failed to update feedback");
       setTimeout(() => setToast(""), 2000);
     }
   }

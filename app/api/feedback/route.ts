@@ -38,3 +38,25 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ success: true, feedback: data });
 }
+
+export async function DELETE(request: NextRequest) {
+  const { article_id } = await request.json();
+
+  if (!article_id) {
+    return NextResponse.json(
+      { error: "article_id is required" },
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("article_feedback")
+    .delete()
+    .eq("article_id", article_id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}

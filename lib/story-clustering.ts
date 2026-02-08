@@ -161,50 +161,58 @@ export async function runClustering() {
     })
   );
 
-  // Process results and persist to DB
+  // Collect all valid clusters from all categories
+  const allClusters: { cluster: ClusterResult; category: string }[] = [];
   for (const result of clusterResults) {
     if (result.status === "rejected") {
       errors.push(result.reason?.message || String(result.reason));
       continue;
     }
-
     for (const cluster of result.value.clusters) {
       if (cluster.related_article_ids.length === 0) continue;
-
       const primaryArticle = articleMap.get(cluster.primary_article_id);
       if (!primaryArticle) continue;
+      allClusters.push({ cluster, category: primaryArticle.category });
+    }
+  }
 
-      const { data: clusterRow, error: insertErr } = await supabase
-        .from("story_clusters")
-        .insert({
-          cluster_headline: cluster.cluster_headline,
-          article_count: 1 + cluster.related_article_ids.length,
-          category: primaryArticle.category,
-        })
-        .select("id")
-        .single();
+  // Batch insert all story_clusters at once
+  if (allClusters.length > 0) {
+    const clusterRows = allClusters.map((c) => ({
+      cluster_headline: c.cluster.cluster_headline,
+      article_count: 1 + c.cluster.related_article_ids.length,
+      category: c.category,
+    }));
 
-      if (insertErr || !clusterRow) {
-        errors.push(`Cluster insert: ${insertErr?.message}`);
-        continue;
-      }
+    const { data: insertedClusters, error: insertErr } = await supabase
+      .from("story_clusters")
+      .insert(clusterRows)
+      .select("id");
 
-      const clusterId = clusterRow.id;
-      clustersCreated++;
+    if (insertErr || !insertedClusters) {
+      errors.push(`Batch cluster insert: ${insertErr?.message}`);
+    } else {
+      clustersCreated = insertedClusters.length;
 
-      await supabase
-        .from("article_analysis")
-        .update({ cluster_id: clusterId, is_primary_in_cluster: true })
-        .eq("id", cluster.primary_article_id);
+      // Batch update all article_analysis rows
+      for (let i = 0; i < insertedClusters.length; i++) {
+        const clusterId = insertedClusters[i].id;
+        const c = allClusters[i].cluster;
 
-      for (const relatedId of cluster.related_article_ids) {
         await supabase
           .from("article_analysis")
-          .update({ cluster_id: clusterId, is_primary_in_cluster: false })
-          .eq("id", relatedId);
-      }
+          .update({ cluster_id: clusterId, is_primary_in_cluster: true })
+          .eq("id", c.primary_article_id);
 
-      articlesClustered += 1 + cluster.related_article_ids.length;
+        if (c.related_article_ids.length > 0) {
+          await supabase
+            .from("article_analysis")
+            .update({ cluster_id: clusterId, is_primary_in_cluster: false })
+            .in("id", c.related_article_ids);
+        }
+
+        articlesClustered += 1 + c.related_article_ids.length;
+      }
     }
   }
 

@@ -134,10 +134,10 @@ function buildDigest(data: ArticlesResponse) {
 }
 
 const FEEDBACK_REASONS = [
-  { value: "not_relevant", label: "Not relevant" },
-  { value: "duplicate", label: "Duplicate" },
+  { value: "not_relevant", label: "Not relevant to antisemitism" },
+  { value: "duplicate", label: "Duplicate article" },
   { value: "wrong_category", label: "Wrong category" },
-  { value: "low_priority", label: "Low priority" },
+  { value: "low_priority", label: "Low priority / not newsworthy" },
 ];
 
 export default function ArticlesPage() {
@@ -277,20 +277,9 @@ export default function ArticlesPage() {
           )}
         </div>
         <div
-          className="flex gap-1 shrink-0 mt-0.5 relative"
+          className="shrink-0 mt-0.5 relative"
           data-reason-dropdown
         >
-          <button
-            onClick={() => handleFeedback(article.article_id, "relevant")}
-            className={`w-5 h-5 flex items-center justify-center rounded text-xs font-medium transition-colors ${
-              feedbackState[article.article_id] === "relevant"
-                ? "bg-green-800 text-green-300"
-                : "text-green-600 bg-gray-800 hover:bg-gray-700"
-            }`}
-            title="Relevant"
-          >
-            +
-          </button>
           <button
             onClick={() => {
               if (feedbackState[article.article_id] === "not_relevant") {
@@ -306,16 +295,18 @@ export default function ArticlesPage() {
             className={`w-5 h-5 flex items-center justify-center rounded text-xs font-medium transition-colors ${
               feedbackState[article.article_id] === "not_relevant"
                 ? "bg-red-800 text-red-300"
-                : "text-red-600 bg-gray-800 hover:bg-gray-700"
+                : "text-gray-500 bg-gray-800 hover:bg-gray-700 hover:text-gray-300"
             }`}
-            title="Not relevant"
+            title="Flag this article"
           >
-            &minus;
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+              <path d="M3.5 2a.5.5 0 0 1 .5.5v1h8.5a.5.5 0 0 1 .404.796L10.902 7.5l2.002 3.204A.5.5 0 0 1 12.5 11.5H4v2a.5.5 0 0 1-1 0v-11A.5.5 0 0 1 3.5 2Z" />
+            </svg>
           </button>
           {reasonDropdown === article.article_id && (
-            <div className="absolute right-0 top-6 z-10 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 w-36">
-              <p className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">
-                Why?
+            <div className="absolute right-0 top-7 z-10 bg-gray-800 border border-gray-600 rounded-lg shadow-xl py-2 w-52">
+              <p className="px-3 pb-2 text-[11px] text-gray-400 border-b border-gray-700 mb-1">
+                What&apos;s wrong with this article?
               </p>
               {FEEDBACK_REASONS.map((r) => (
                 <button

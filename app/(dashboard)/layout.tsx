@@ -61,6 +61,7 @@ export default function DashboardLayout({
     let totalNew = 0;
     let totalRelevant = 0;
 
+    const stageErrors: string[] = [];
     for (const stage of SYNC_STAGES) {
       if (abortRef.current) break;
       setSyncToast(stage.label);
@@ -70,10 +71,8 @@ export default function DashboardLayout({
         const data = await res.json();
 
         if (!res.ok) {
-          setSyncToast(`Failed at: ${stage.label} — ${data.error || "unknown error"}`);
-          setSyncing(false);
-          setTimeout(() => setSyncToast(null), 8000);
-          return;
+          stageErrors.push(stage.label);
+          continue; // Continue to next stage instead of aborting
         }
 
         // Collect stats from each stage
@@ -82,10 +81,8 @@ export default function DashboardLayout({
           totalRelevant += data.claude_analysis.articles_relevant;
         }
       } catch {
-        setSyncToast(`Failed at: ${stage.label} — network error`);
-        setSyncing(false);
-        setTimeout(() => setSyncToast(null), 8000);
-        return;
+        stageErrors.push(stage.label);
+        continue; // Continue to next stage instead of aborting
       }
     }
 
@@ -102,8 +99,11 @@ export default function DashboardLayout({
 
     fetchLastSync();
     setSyncing(false);
+    const errNote = stageErrors.length > 0
+      ? ` (${stageErrors.length} stage${stageErrors.length > 1 ? "s" : ""} timed out)`
+      : "";
     setSyncToast(
-      `Sync complete — ${totalNew} new articles, ${totalRelevant} relevant`
+      `Sync complete — ${totalNew} new articles, ${totalRelevant} relevant${errNote}`
     );
     setTimeout(() => setSyncToast(null), 8000);
   }

@@ -33,6 +33,7 @@ interface ArticlesResponse {
   sources: string[];
   categories: Record<string, ArticleData[]>;
   clusters: Record<string, string>;
+  category_summaries: Record<string, string[]>;
 }
 
 interface ClusterGroup {
@@ -600,6 +601,7 @@ export default function ArticlesPage() {
             const sorted = sortByInternational(articles as ArticleData[]);
             const grouped = groupByClusters(sorted, data.clusters || {});
             const isCollapsed = collapsedCats[cat] ?? true;
+            const summaryBullets = data.category_summaries?.[cat] || [];
             return (
               <section key={cat}>
                 <button
@@ -623,6 +625,25 @@ export default function ArticlesPage() {
                     {isCollapsed ? "Show" : "Hide"}
                   </span>
                 </button>
+                {summaryBullets.length > 0 && (
+                  <div className="mb-2">
+                    {summaryBullets.length > 1 && (
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">
+                        Today&apos;s highlights
+                      </p>
+                    )}
+                    <ul className="space-y-0.5">
+                      {summaryBullets.map((bullet, i) => (
+                        <li
+                          key={i}
+                          className="text-xs text-gray-400 leading-relaxed pl-3 relative before:content-['–'] before:absolute before:left-0 before:text-gray-600"
+                        >
+                          {bullet}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {!isCollapsed && (
                   <div className="space-y-1">
                     {grouped.map((cluster) =>

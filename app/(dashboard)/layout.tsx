@@ -20,6 +20,7 @@ const SYNC_STAGES = [
   { url: "/api/ingest-gnews", label: "Querying GNews API..." },
   { url: "/api/analyze-articles", label: "Analyzing articles with Claude..." },
   { url: "/api/cluster-stories", label: "Clustering related stories..." },
+  { url: "/api/generate-summaries", label: "Generating category summaries..." },
 ];
 
 export default function DashboardLayout({

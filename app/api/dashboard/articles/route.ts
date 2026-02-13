@@ -136,6 +136,17 @@ export async function GET(request: NextRequest) {
       .gte("analyzed_at", startOfDay)
       .lte("analyzed_at", endOfDay);
 
+    // Fetch category summaries for this date
+    const { data: summaryData } = await supabase
+      .from("category_summaries")
+      .select("category, summary_bullets")
+      .eq("run_date", date);
+
+    const categorySummaries: Record<string, string[]> = {};
+    for (const row of summaryData || []) {
+      categorySummaries[row.category] = row.summary_bullets as string[];
+    }
+
     return NextResponse.json({
       date,
       total: data?.length || 0,
@@ -143,6 +154,7 @@ export async function GET(request: NextRequest) {
       sources,
       categories: grouped,
       clusters: Object.fromEntries(clusterHeadlines),
+      category_summaries: categorySummaries,
     });
   } catch (err: any) {
     return NextResponse.json(

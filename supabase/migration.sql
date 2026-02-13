@@ -460,3 +460,16 @@ ALTER TABLE article_analysis ADD COLUMN IF NOT EXISTS is_international boolean D
 -- Issue 5: Feedback reasons
 ALTER TABLE article_feedback ADD COLUMN IF NOT EXISTS reason text CHECK (reason IN ('not_relevant', 'duplicate', 'wrong_category', 'low_priority'));
 UPDATE article_feedback SET reason = 'not_relevant' WHERE reason IS NULL;
+
+-- Category daily summaries
+-- =============================================================
+
+CREATE TABLE IF NOT EXISTS category_summaries (
+  id serial PRIMARY KEY,
+  run_date date NOT NULL,
+  category text NOT NULL,
+  summary_bullets jsonb NOT NULL,
+  article_count integer NOT NULL,
+  generated_at timestamptz DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_category_summary_date ON category_summaries(run_date, category);

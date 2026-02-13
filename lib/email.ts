@@ -82,7 +82,7 @@ function groupByCategory(articles: DigestArticle[]): Record<string, DigestArticl
   return grouped;
 }
 
-function buildEmailHtml(articles: DigestArticle[], date: string): string {
+function buildEmailHtml(articles: DigestArticle[], date: string, categorySummaries?: Record<string, string[]>): string {
   const sources = new Set(articles.map((a) => a.source));
   const categoryCount = new Set(articles.map((a) => a.category)).size;
   const rssCount = articles.filter((a) => a.source_type === "rss").length;
@@ -121,6 +121,20 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
     <h1>Daily Antisemitism News Monitor</h1>
     <div class="meta">${date} &bull; ${articles.length} article${articles.length !== 1 ? "s" : ""} from ${sources.size} source${sources.size !== 1 ? "s" : ""}${sourceBreakdown}</div>
   </div>`;
+
+  const renderCategoryBullets = (category: string): string => {
+    const bullets = categorySummaries?.[category];
+    if (!bullets || bullets.length === 0) return "";
+    let html = `<div style="margin-bottom: 16px; padding: 10px 14px; background: #f8f9fa; border-radius: 4px;">`;
+    if (bullets.length > 1) {
+      html += `<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #888; margin-bottom: 6px;">Key Developments</div>`;
+    }
+    for (const bullet of bullets) {
+      html += `<div style="font-size: 13px; color: #444; line-height: 1.5; margin-bottom: 4px; padding-left: 12px; position: relative;"><span style="position: absolute; left: 0; color: #999;">&ndash;</span> ${escapeHtml(bullet)}</div>`;
+    }
+    html += `</div>`;
+    return html;
+  };
 
   const renderCategoryArticles = (catArticles: DigestArticle[]): string => {
     let catHtml = "";
@@ -184,6 +198,7 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
       html += `
   <div class="category">
     <h2>${category}</h2>`;
+      html += renderCategoryBullets(category);
       html += renderCategoryArticles(catArticles);
       html += `
   </div>`;
@@ -220,6 +235,7 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
       html += `
   <div class="category">
     <h2>${category}</h2>`;
+      html += renderCategoryBullets(category);
       html += renderCategoryArticles(catArticles);
       html += `
   </div>`;
@@ -276,7 +292,7 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export async function sendDigest(articles: DigestArticle[]) {
+export async function sendDigest(articles: DigestArticle[], categorySummaries?: Record<string, string[]>) {
   const date = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -292,7 +308,7 @@ export async function sendDigest(articles: DigestArticle[]) {
     : `Antisemitism News Digest - ${date} (No articles)`;
 
   const html = hasArticles
-    ? buildEmailHtml(articles, date)
+    ? buildEmailHtml(articles, date, categorySummaries)
     : buildEmptyHtml(date);
 
   const { data, error } = await resend.emails.send({
@@ -367,6 +383,18 @@ export async function runDigest() {
     }
   }
 
+  // Fetch category summaries for today
+  const todayDate = new Date().toISOString().split("T")[0];
+  const { data: summaryData } = await supabase
+    .from("category_summaries")
+    .select("category, summary_bullets")
+    .eq("run_date", todayDate);
+
+  const categorySummaries: Record<string, string[]> = {};
+  for (const row of summaryData || []) {
+    categorySummaries[row.category] = row.summary_bullets as string[];
+  }
+
   // Build all articles with cluster headline and is_international attached
   const articles: DigestArticle[] = rows.map((row: any) => ({
     title: row.articles.title,
@@ -383,7 +411,7 @@ export async function runDigest() {
       : undefined,
   }));
 
-  const result = await sendDigest(articles);
+  const result = await sendDigest(articles, categorySummaries);
 
   await supabase.from("digest_logs").insert({
     recipient: result.recipient,

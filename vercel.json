@@ -26,8 +26,12 @@
       "schedule": "13 11 * * *"
     },
     {
-      "path": "/api/send-digest",
+      "path": "/api/generate-summaries",
       "schedule": "15 11 * * *"
+    },
+    {
+      "path": "/api/send-digest",
+      "schedule": "18 11 * * *"
     }
   ]
 }

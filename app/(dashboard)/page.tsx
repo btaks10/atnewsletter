@@ -530,9 +530,37 @@ export default function ArticlesPage() {
                       </h3>
                       <div className="space-y-3">
                         {digest.topStories.map(({ group, category: cat }) => (
-                          <div
+                          <button
                             key={group.articles[0].id}
-                            className="flex gap-3 items-start"
+                            className="flex gap-3 items-start w-full text-left hover:bg-gray-800/50 rounded px-1 py-0.5 -mx-1 transition-colors"
+                            onClick={() => {
+                              const clusterId = group.articles[0].cluster_id;
+                              if (!clusterId) return;
+                              setCollapsedCats((prev) => ({
+                                ...prev,
+                                [cat]: false,
+                              }));
+                              setTimeout(() => {
+                                const el = document.getElementById(
+                                  `cluster-${clusterId}`
+                                );
+                                if (el) {
+                                  el.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                  el.classList.add("ring-2", "ring-gray-500");
+                                  setTimeout(
+                                    () =>
+                                      el.classList.remove(
+                                        "ring-2",
+                                        "ring-gray-500"
+                                      ),
+                                    2000
+                                  );
+                                }
+                              }, 50);
+                            }}
                           >
                             <span className="text-xs font-medium text-gray-600 bg-gray-800 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
                               {group.clusterArticleCount}x
@@ -550,7 +578,7 @@ export default function ArticlesPage() {
                                   .join(", ")}
                               </p>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>
@@ -611,7 +639,8 @@ export default function ArticlesPage() {
                       cluster.clusterArticleCount > 1 ? (
                         <div
                           key={`cluster-${cluster.articles[0].id}`}
-                          className="border border-gray-600 rounded-lg overflow-hidden"
+                          id={cluster.articles[0].cluster_id ? `cluster-${cluster.articles[0].cluster_id}` : undefined}
+                          className="border border-gray-600 rounded-lg overflow-hidden transition-shadow"
                         >
                           <div className="bg-gray-800 px-3 py-2 border-b border-gray-600 flex items-center gap-2">
                             <span className="text-sm font-semibold text-gray-200">

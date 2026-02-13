@@ -579,6 +579,10 @@ export default function ArticlesPage() {
           {Object.entries(data.categories).map(([cat, articles]) => {
             const sorted = sortByInternational(articles as ArticleData[]);
             const grouped = groupByClusters(sorted, data.clusters || {});
+            const multiClusters = grouped.filter(g => g.clusterHeadline && g.clusterArticleCount > 1);
+            if (multiClusters.length > 0) {
+              console.log(`[DEBUG] ${cat}: ${multiClusters.length} cluster groups`, multiClusters.map(g => ({ headline: g.clusterHeadline, count: g.clusterArticleCount })));
+            }
             return (
               <section key={cat}>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 pb-1.5 mb-2">
@@ -590,13 +594,13 @@ export default function ArticlesPage() {
                     cluster.clusterArticleCount > 1 ? (
                       <div
                         key={`cluster-${cluster.articles[0].id}`}
-                        className="border border-gray-700 rounded-lg overflow-hidden"
+                        className="border-2 border-blue-500 rounded-lg overflow-hidden"
                       >
-                        <div className="bg-gray-800/50 px-3 py-1.5 border-b border-gray-700">
-                          <span className="text-xs font-medium text-gray-300">
+                        <div className="bg-blue-900/30 px-3 py-2 border-b border-blue-500">
+                          <span className="text-sm font-semibold text-blue-300">
                             {cluster.clusterHeadline}
                           </span>
-                          <span className="text-xs text-gray-500 ml-2">
+                          <span className="text-xs text-blue-400 ml-2">
                             {cluster.clusterArticleCount} articles
                           </span>
                         </div>

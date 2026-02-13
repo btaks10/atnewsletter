@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       category,
       cluster_id,
       is_primary_in_cluster,
+      is_international,
       analyzed_at,
       articles!inner (
         id,
@@ -57,23 +58,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Fetch cluster headlines for grouped display
+    const clusterIds = [
+      ...new Set(
+        (data || [])
+          .map((row: any) => row.cluster_id)
+          .filter((id: any) => id != null)
+      ),
+    ];
+
+    let clusterHeadlines = new Map<number, string>();
+    if (clusterIds.length > 0) {
+      const { data: clusterData } = await supabase
+        .from("story_clusters")
+        .select("id, cluster_headline")
+        .in("id", clusterIds);
+
+      if (clusterData) {
+        clusterHeadlines = new Map(
+          clusterData.map((c: any) => [c.id, c.cluster_headline])
+        );
+      }
+    }
+
     // Fetch feedback separately (more reliable than nested join)
     const articleIds = (data || []).map((row: any) => row.article_id);
     let feedbackMap = new Map<
       string,
-      { feedback: string; notes: string | null }
+      { feedback: string; reason: string | null; notes: string | null }
     >();
 
     if (articleIds.length > 0) {
       const { data: feedbackData } = await supabase
         .from("article_feedback")
-        .select("article_id, feedback, notes")
+        .select("article_id, feedback, reason, notes")
         .in("article_id", articleIds);
 
       feedbackMap = new Map(
         (feedbackData || []).map((f: any) => [
           f.article_id,
-          { feedback: f.feedback, notes: f.notes },
+          { feedback: f.feedback, reason: f.reason, notes: f.notes },
         ])
       );
     }
@@ -118,6 +142,7 @@ export async function GET(request: NextRequest) {
       total_analyzed: totalAnalyzed ?? data?.length ?? 0,
       sources,
       categories: grouped,
+      clusters: Object.fromEntries(clusterHeadlines),
     });
   } catch (err: any) {
     return NextResponse.json(

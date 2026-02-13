@@ -1,6 +1,7 @@
 import Parser from "rss-parser";
 import { supabase } from "./supabase";
 import { FeedSource, getArticleAgeCutoff } from "./config";
+import { findDuplicate } from "./dedup";
 
 const parser = new Parser({
   timeout: 10000,
@@ -18,6 +19,7 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
   const errors: string[] = [];
   try {
     const rss = await parser.parseURL(feed.url);
+    const isGoogleNews = feed.url.includes("news.google.com");
 
     const cutoff = new Date(getArticleAgeCutoff());
     const recentItems = rss.items.filter((item) => {
@@ -43,11 +45,41 @@ export async function ingestFeed(feed: FeedSource): Promise<IngestResult> {
       }
       if (existing) continue;
 
+      // Parse actual source from Google News RSS titles ("Headline - Publisher")
+      let articleTitle = item.title || "Untitled";
+      let articleSource = feed.name;
+      if (isGoogleNews && articleTitle.includes(" - ")) {
+        const lastDash = articleTitle.lastIndexOf(" - ");
+        articleSource = articleTitle.slice(lastDash + 3).trim();
+        articleTitle = articleTitle.slice(0, lastDash).trim();
+      }
+
+      // Title-based fuzzy dedup
+      const duplicateOfId = await findDuplicate(articleTitle);
+      if (duplicateOfId) {
+        await supabase.from("articles").insert({
+          url,
+          title: articleTitle,
+          author: item.creator || item["dc:creator"] || null,
+          source: articleSource,
+          source_type: "rss",
+          published_at: item.pubDate
+            ? new Date(item.pubDate).toISOString()
+            : new Date().toISOString(),
+          raw_content:
+            item.contentSnippet || item.content || item.summary || null,
+          analyzed: true,
+          duplicate_of: duplicateOfId,
+        });
+        newCount++;
+        continue;
+      }
+
       const { error: insertError } = await supabase.from("articles").insert({
         url,
-        title: item.title || "Untitled",
+        title: articleTitle,
         author: item.creator || item["dc:creator"] || null,
-        source: feed.name,
+        source: articleSource,
         source_type: "rss",
         published_at: item.pubDate
           ? new Date(item.pubDate).toISOString()

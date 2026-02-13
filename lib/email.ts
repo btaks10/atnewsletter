@@ -13,7 +13,8 @@ interface DigestArticle {
   published_at: string;
   summary: string;
   category: string;
-  relatedArticles?: { source: string; url: string }[];
+  is_international: boolean;
+  clusterHeadline?: string;
 }
 
 function formatDate(dateStr: string): string {
@@ -28,16 +29,27 @@ const TOP_STORIES_LIMIT = 30;
 
 function renderFullArticle(article: DigestArticle): string {
   const authorPart = article.author ? ` &bull; ${article.author}` : "";
-  const alsoCoveredBy =
-    article.relatedArticles && article.relatedArticles.length > 0
-      ? `\n      <div class="source-info" style="margin-top: 4px;">Also covered by: ${article.relatedArticles.map((r) => `<a href="${r.url}" style="color: #888; text-decoration: underline;">${escapeHtml(r.source)}</a>`).join(", ")}</div>`
-      : "";
+  const intlBadge = article.is_international
+    ? ` <span style="display: inline-block; background: #f59e0b; color: #fff; font-size: 10px; font-weight: bold; padding: 1px 5px; border-radius: 3px; vertical-align: middle;">INTL</span>`
+    : "";
   return `
     <div class="article">
-      <a href="${article.url}">${escapeHtml(article.title)}</a>
+      <a href="${article.url}">${escapeHtml(article.title)}</a>${intlBadge}
       <div class="source-info">${escapeHtml(article.source)}${authorPart} &bull; ${formatDate(article.published_at)}</div>
-      <p class="summary">${escapeHtml(article.summary)}</p>${alsoCoveredBy}
+      <p class="summary">${escapeHtml(article.summary)}</p>
     </div>`;
+}
+
+function renderClusterGroup(articles: DigestArticle[], headline: string): string {
+  let html = `
+    <div style="border: 1px solid #d1d5db; border-radius: 6px; padding: 12px 16px; margin-bottom: 18px;">
+      <div style="font-weight: bold; font-size: 15px; color: #1a1a1a; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;">${escapeHtml(headline)} <span style="font-weight: normal; font-size: 13px; color: #888;">(${articles.length} article${articles.length !== 1 ? "s" : ""})</span></div>`;
+  for (const article of articles) {
+    html += renderFullArticle(article);
+  }
+  html += `
+    </div>`;
+  return html;
 }
 
 function renderCompactArticle(article: DigestArticle): string {
@@ -56,11 +68,16 @@ function groupByCategory(articles: DigestArticle[]): Record<string, DigestArticl
     grouped[cat].push(article);
   }
   for (const cat of Object.keys(grouped)) {
-    grouped[cat].sort(
-      (a, b) =>
+    grouped[cat].sort((a, b) => {
+      // US-focused first, international last
+      if (a.is_international !== b.is_international) {
+        return a.is_international ? 1 : -1;
+      }
+      return (
         new Date(b.published_at).getTime() -
         new Date(a.published_at).getTime()
-    );
+      );
+    });
   }
   return grouped;
 }
@@ -105,6 +122,39 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
     <div class="meta">${date} &bull; ${articles.length} article${articles.length !== 1 ? "s" : ""} from ${sources.size} source${sources.size !== 1 ? "s" : ""}${sourceBreakdown}</div>
   </div>`;
 
+  const renderCategoryArticles = (catArticles: DigestArticle[]): string => {
+    let catHtml = "";
+    // Group articles by cluster headline
+    const clusterGroups = new Map<string, DigestArticle[]>();
+    const standalone: DigestArticle[] = [];
+
+    for (const article of catArticles) {
+      if (article.clusterHeadline) {
+        if (!clusterGroups.has(article.clusterHeadline)) {
+          clusterGroups.set(article.clusterHeadline, []);
+        }
+        clusterGroups.get(article.clusterHeadline)!.push(article);
+      } else {
+        standalone.push(article);
+      }
+    }
+
+    // Render multi-article clusters first, then standalone
+    for (const [headline, clusterArticles] of clusterGroups) {
+      if (clusterArticles.length > 1) {
+        catHtml += renderClusterGroup(clusterArticles, headline);
+      } else {
+        standalone.push(clusterArticles[0]);
+      }
+    }
+
+    for (const article of standalone) {
+      catHtml += renderFullArticle(article);
+    }
+
+    return catHtml;
+  };
+
   if (isLargeVolume) {
     // Split into Top Stories (full format) and Full Coverage (compact)
     const topStories: DigestArticle[] = [];
@@ -134,9 +184,7 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
       html += `
   <div class="category">
     <h2>${category}</h2>`;
-      for (const article of catArticles) {
-        html += renderFullArticle(article);
-      }
+      html += renderCategoryArticles(catArticles);
       html += `
   </div>`;
     }
@@ -172,9 +220,7 @@ function buildEmailHtml(articles: DigestArticle[], date: string): string {
       html += `
   <div class="category">
     <h2>${category}</h2>`;
-      for (const article of catArticles) {
-        html += renderFullArticle(article);
-      }
+      html += renderCategoryArticles(catArticles);
       html += `
   </div>`;
     }
@@ -280,7 +326,7 @@ export async function runDigest() {
       summary,
       category,
       cluster_id,
-      is_primary_in_cluster,
+      is_international,
       articles!inner (
         title,
         url,
@@ -300,74 +346,42 @@ export async function runDigest() {
 
   const rows = data || [];
 
-  // Group by cluster_id to merge clustered articles
-  const clusterMap = new Map<number, any[]>();
-  const unclustered: any[] = [];
+  // Fetch cluster headlines
+  const clusterIds = [
+    ...new Set(
+      rows.map((r: any) => r.cluster_id).filter((id: any) => id != null)
+    ),
+  ];
 
-  for (const row of rows) {
-    if (row.cluster_id) {
-      if (!clusterMap.has(row.cluster_id)) {
-        clusterMap.set(row.cluster_id, []);
-      }
-      clusterMap.get(row.cluster_id)!.push(row);
-    } else {
-      unclustered.push(row);
+  let clusterHeadlines = new Map<number, string>();
+  if (clusterIds.length > 0) {
+    const { data: clusterData } = await supabase
+      .from("story_clusters")
+      .select("id, cluster_headline")
+      .in("id", clusterIds);
+
+    if (clusterData) {
+      clusterHeadlines = new Map(
+        clusterData.map((c: any) => [c.id, c.cluster_headline])
+      );
     }
   }
 
-  const articles: DigestArticle[] = [];
-
-  // Process unclustered articles (render as individual items)
-  for (const row of unclustered) {
-    articles.push({
-      title: row.articles.title,
-      url: row.articles.url,
-      source: row.articles.source,
-      source_type: row.articles.source_type || "rss",
-      author: row.articles.author,
-      published_at: row.articles.published_at,
-      summary: row.summary,
-      category: row.category,
-    });
-  }
-
-  // Process clustered articles (merge into primary with "Also covered by")
-  for (const [, clusterRows] of clusterMap) {
-    const primary = clusterRows.find((r: any) => r.is_primary_in_cluster);
-    const related = clusterRows.filter((r: any) => !r.is_primary_in_cluster);
-
-    if (!primary) {
-      // Fallback: if no primary found, render all individually
-      for (const row of clusterRows) {
-        articles.push({
-          title: row.articles.title,
-          url: row.articles.url,
-          source: row.articles.source,
-          source_type: row.articles.source_type || "rss",
-          author: row.articles.author,
-          published_at: row.articles.published_at,
-          summary: row.summary,
-          category: row.category,
-        });
-      }
-      continue;
-    }
-
-    articles.push({
-      title: primary.articles.title,
-      url: primary.articles.url,
-      source: primary.articles.source,
-      source_type: primary.articles.source_type || "rss",
-      author: primary.articles.author,
-      published_at: primary.articles.published_at,
-      summary: primary.summary,
-      category: primary.category,
-      relatedArticles: related.map((r: any) => ({
-        source: r.articles.source,
-        url: r.articles.url,
-      })),
-    });
-  }
+  // Build all articles with cluster headline and is_international attached
+  const articles: DigestArticle[] = rows.map((row: any) => ({
+    title: row.articles.title,
+    url: row.articles.url,
+    source: row.articles.source,
+    source_type: row.articles.source_type || "rss",
+    author: row.articles.author,
+    published_at: row.articles.published_at,
+    summary: row.summary,
+    category: row.category,
+    is_international: row.is_international || false,
+    clusterHeadline: row.cluster_id
+      ? clusterHeadlines.get(row.cluster_id) || undefined
+      : undefined,
+  }));
 
   const result = await sendDigest(articles);
 

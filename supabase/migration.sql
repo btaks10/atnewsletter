@@ -445,3 +445,18 @@ insert into gnews_queries (query, category, priority) values
   ('"combating antisemitism" OR "fighting antisemitism" OR "addressing antisemitism"', 'Other', 6),
   ('"antisemitism awareness" OR "antisemitism education" OR "Holocaust education"', 'Other', 6)
 on conflict do nothing;
+
+-- =============================================================
+-- Sprint 5: Cluster display, dedup, international, feedback
+-- =============================================================
+
+-- Issue 3b: Fuzzy title dedup
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS duplicate_of uuid REFERENCES articles(id);
+CREATE INDEX IF NOT EXISTS idx_articles_duplicate ON articles(duplicate_of);
+
+-- Issue 4: International sort-to-bottom
+ALTER TABLE article_analysis ADD COLUMN IF NOT EXISTS is_international boolean DEFAULT false;
+
+-- Issue 5: Feedback reasons
+ALTER TABLE article_feedback ADD COLUMN IF NOT EXISTS reason text CHECK (reason IN ('not_relevant', 'duplicate', 'wrong_category', 'low_priority'));
+UPDATE article_feedback SET reason = 'not_relevant' WHERE reason IS NULL;

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { getArticleAgeCutoff } from "./config";
+import { findDuplicate } from "./dedup";
 
 interface GNewsArticle {
   title: string;
@@ -122,6 +123,24 @@ export async function runGNewsIngestion() {
           .maybeSingle();
 
         if (existing) {
+          results.duplicates_skipped++;
+          continue;
+        }
+
+        // Title-based fuzzy dedup
+        const duplicateOfId = await findDuplicate(article.title);
+        if (duplicateOfId) {
+          await supabase.from("articles").insert({
+            title: article.title,
+            url: article.url,
+            source: article.source.name,
+            source_type: "gnews_api",
+            author: null,
+            published_at: article.publishedAt,
+            raw_content: article.content || article.description || null,
+            analyzed: true,
+            duplicate_of: duplicateOfId,
+          });
           results.duplicates_skipped++;
           continue;
         }

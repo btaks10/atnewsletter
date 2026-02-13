@@ -94,11 +94,11 @@ export async function runClustering() {
     throw new Error(fetchError.message);
   }
 
-  if (!data || data.length <= 3) {
+  if (!data || data.length < 2) {
     return {
       skipped: true,
       reason: data
-        ? `Only ${data.length} relevant articles (need 4+)`
+        ? `Only ${data.length} relevant articles (need 2+)`
         : "No relevant articles",
       clusters_created: 0,
       articles_clustered: 0,

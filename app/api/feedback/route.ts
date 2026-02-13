@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
-  const { article_id, feedback, notes } = await request.json();
+  const { article_id, feedback, notes, reason } = await request.json();
 
   if (!article_id || !feedback) {
     return NextResponse.json(
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
         article_id,
         feedback,
         notes: notes || null,
+        reason: reason || null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "article_id" }

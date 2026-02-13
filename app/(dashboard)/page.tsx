@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface ArticleData {
   id: string;
@@ -9,6 +9,7 @@ interface ArticleData {
   category: string;
   cluster_id: number | null;
   is_primary_in_cluster: boolean;
+  is_international: boolean;
   articles: {
     id: string;
     title: string;
@@ -20,6 +21,7 @@ interface ArticleData {
   };
   feedback: {
     feedback: string;
+    reason: string | null;
     notes: string | null;
   } | null;
 }
@@ -30,14 +32,19 @@ interface ArticlesResponse {
   total_analyzed: number;
   sources: string[];
   categories: Record<string, ArticleData[]>;
+  clusters: Record<string, string>;
 }
 
-interface GroupedArticle {
-  primary: ArticleData;
-  related: ArticleData[];
+interface ClusterGroup {
+  clusterHeadline: string | null;
+  clusterArticleCount: number;
+  articles: ArticleData[];
 }
 
-function groupByClusters(articles: ArticleData[]): GroupedArticle[] {
+function groupByClusters(
+  articles: ArticleData[],
+  clusterHeadlines: Record<string, string>
+): ClusterGroup[] {
   const clusters = new Map<number, ArticleData[]>();
   const standalone: ArticleData[] = [];
 
@@ -52,43 +59,63 @@ function groupByClusters(articles: ArticleData[]): GroupedArticle[] {
     }
   }
 
-  const result: GroupedArticle[] = [];
+  const result: ClusterGroup[] = [];
 
-  for (const [, group] of clusters) {
-    const primary =
-      group.find((a) => a.is_primary_in_cluster) || group[0];
-    const related = group.filter((a) => a !== primary);
-    result.push({ primary, related });
+  for (const [clusterId, group] of clusters) {
+    result.push({
+      clusterHeadline: clusterHeadlines[String(clusterId)] || null,
+      clusterArticleCount: group.length,
+      articles: group,
+    });
   }
 
   for (const article of standalone) {
-    result.push({ primary: article, related: [] });
+    result.push({
+      clusterHeadline: null,
+      clusterArticleCount: 1,
+      articles: [article],
+    });
   }
 
   return result;
 }
 
+function sortByInternational(articles: ArticleData[]): ArticleData[] {
+  return [...articles].sort((a, b) => {
+    if (a.is_international === b.is_international) return 0;
+    return a.is_international ? 1 : -1;
+  });
+}
+
 function buildDigest(data: ArticlesResponse) {
-  // Gather all grouped articles across categories
-  const allGrouped: { group: GroupedArticle; category: string }[] = [];
+  const allGrouped: { group: ClusterGroup; category: string }[] = [];
   for (const [cat, articles] of Object.entries(data.categories)) {
-    for (const g of groupByClusters(articles as ArticleData[])) {
+    for (const g of groupByClusters(
+      articles as ArticleData[],
+      data.clusters || {}
+    )) {
       allGrouped.push({ group: g, category: cat });
     }
   }
 
-  // Sort by coverage volume (most sources first), then standalone
   allGrouped.sort(
-    (a, b) => (b.group.related.length + 1) - (a.group.related.length + 1)
+    (a, b) => b.group.clusterArticleCount - a.group.clusterArticleCount
   );
 
-  // Top stories: clusters with 2+ articles
-  const topStories = allGrouped.filter((g) => g.group.related.length > 0);
+  const topStories = allGrouped.filter(
+    (g) => g.group.clusterArticleCount > 1
+  );
 
-  // Category breakdown: category → count of unique stories (not articles)
-  const catBreakdown: { name: string; stories: number; articles: number }[] = [];
+  const catBreakdown: {
+    name: string;
+    stories: number;
+    articles: number;
+  }[] = [];
   for (const [cat, articles] of Object.entries(data.categories)) {
-    const grouped = groupByClusters(articles as ArticleData[]);
+    const grouped = groupByClusters(
+      articles as ArticleData[],
+      data.clusters || {}
+    );
     catBreakdown.push({
       name: cat,
       stories: grouped.length,
@@ -106,6 +133,13 @@ function buildDigest(data: ArticlesResponse) {
   };
 }
 
+const FEEDBACK_REASONS = [
+  { value: "not_relevant", label: "Not relevant" },
+  { value: "duplicate", label: "Duplicate" },
+  { value: "wrong_category", label: "Wrong category" },
+  { value: "low_priority", label: "Low priority" },
+];
+
 export default function ArticlesPage() {
   const [date, setDate] = useState(() =>
     new Date().toISOString().split("T")[0]
@@ -121,6 +155,9 @@ export default function ArticlesPage() {
     {}
   );
   const [toast, setToast] = useState("");
+  const [reasonDropdown, setReasonDropdown] = useState<string | null>(null);
+  const reasonDropdownRef = useRef<string | null>(null);
+  reasonDropdownRef.current = reasonDropdown;
 
   const fetchArticles = useCallback(async () => {
     setLoading(true);
@@ -154,7 +191,24 @@ export default function ArticlesPage() {
     fetchArticles();
   }, [fetchArticles]);
 
-  async function handleFeedback(articleId: string, feedback: string) {
+  // Close reason dropdown on click-away
+  useEffect(() => {
+    if (!reasonDropdown) return;
+    function handleClickAway(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest("[data-reason-dropdown]")) {
+        setReasonDropdown(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickAway);
+    return () => document.removeEventListener("mousedown", handleClickAway);
+  }, [reasonDropdown]);
+
+  async function handleFeedback(
+    articleId: string,
+    feedback: string,
+    reason?: string
+  ) {
     const isUndo = feedbackState[articleId] === feedback;
 
     setFeedbackState((prev) => {
@@ -166,6 +220,8 @@ export default function ArticlesPage() {
       }
       return next;
     });
+
+    setReasonDropdown(null);
 
     try {
       if (isUndo) {
@@ -179,7 +235,7 @@ export default function ArticlesPage() {
         await fetch("/api/feedback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ article_id: articleId, feedback }),
+          body: JSON.stringify({ article_id: articleId, feedback, reason }),
         });
         setToast("Feedback saved");
       }
@@ -188,6 +244,98 @@ export default function ArticlesPage() {
       setToast("Failed to update feedback");
       setTimeout(() => setToast(""), 2000);
     }
+  }
+
+  function renderArticleCard(article: ArticleData) {
+    return (
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <a
+              href={article.articles.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-gray-100 hover:text-blue-400 leading-snug"
+            >
+              {article.articles.title}
+            </a>
+            <span className="text-xs text-gray-500 shrink-0">
+              {article.articles.source}
+              {article.articles.source_type === "gnews_api" && (
+                <span className="ml-1 text-blue-400">API</span>
+              )}
+              {article.is_international && (
+                <span className="ml-1 text-amber-400 font-medium">INTL</span>
+              )}
+            </span>
+          </div>
+          {article.summary && (
+            <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">
+              {article.summary}
+            </p>
+          )}
+        </div>
+        <div
+          className="flex gap-1 shrink-0 mt-0.5 relative"
+          data-reason-dropdown
+        >
+          <button
+            onClick={() => handleFeedback(article.article_id, "relevant")}
+            className={`w-5 h-5 flex items-center justify-center rounded text-xs font-medium transition-colors ${
+              feedbackState[article.article_id] === "relevant"
+                ? "bg-green-800 text-green-300"
+                : "text-green-600 bg-gray-800 hover:bg-gray-700"
+            }`}
+            title="Relevant"
+          >
+            +
+          </button>
+          <button
+            onClick={() => {
+              if (feedbackState[article.article_id] === "not_relevant") {
+                handleFeedback(article.article_id, "not_relevant");
+              } else {
+                setReasonDropdown(
+                  reasonDropdown === article.article_id
+                    ? null
+                    : article.article_id
+                );
+              }
+            }}
+            className={`w-5 h-5 flex items-center justify-center rounded text-xs font-medium transition-colors ${
+              feedbackState[article.article_id] === "not_relevant"
+                ? "bg-red-800 text-red-300"
+                : "text-red-600 bg-gray-800 hover:bg-gray-700"
+            }`}
+            title="Not relevant"
+          >
+            &minus;
+          </button>
+          {reasonDropdown === article.article_id && (
+            <div className="absolute right-0 top-6 z-10 bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 w-36">
+              <p className="px-3 py-1 text-[10px] text-gray-500 uppercase tracking-wider">
+                Why?
+              </p>
+              {FEEDBACK_REASONS.map((r) => (
+                <button
+                  key={r.value}
+                  onClick={() =>
+                    handleFeedback(
+                      article.article_id,
+                      "not_relevant",
+                      r.value
+                    )
+                  }
+                  className="block w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition-colors"
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const categories = [
@@ -300,122 +448,125 @@ export default function ArticlesPage() {
       )}
 
       {/* TLDR Digest — collapsible summary card */}
-      {!loading && data && data.total > 0 && (() => {
-        const digest = buildDigest(data);
-        return (
-          <div className="mb-6">
-            <button
-              onClick={() => setDigestOpen(!digestOpen)}
-              className={`w-full flex items-center justify-between bg-gray-900 border border-gray-800 px-5 py-3 hover:bg-gray-800/70 transition-colors ${
-                digestOpen ? "rounded-t-lg" : "rounded-lg"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-100">
-                  TLDR
-                </span>
-                <span className="text-xs text-gray-500">
-                  {digest.totalAnalyzed} reviewed, {digest.totalRelevant}{" "}
-                  relevant, {digest.uniqueStories} stories
-                </span>
-              </div>
-              <span className="text-gray-500 text-xs">
-                {digestOpen ? "Hide" : "Show"}
-              </span>
-            </button>
-
-            {digestOpen && (
-              <div className="bg-gray-900 border border-t-0 border-gray-800 rounded-b-lg px-5 pb-5">
-                {/* Scan summary */}
-                <div className="pt-4 pb-4 border-b border-gray-800">
-                  <p className="text-sm text-gray-300 leading-relaxed">
-                    Scanned{" "}
-                    <span className="text-gray-100 font-medium">
-                      {digest.totalAnalyzed} articles
-                    </span>{" "}
-                    from{" "}
-                    <span className="text-gray-100 font-medium">
-                      {digest.uniqueSources} sources
-                    </span>
-                    .{" "}
-                    <span className="text-gray-100 font-medium">
-                      {digest.totalRelevant}
-                    </span>{" "}
-                    flagged as relevant across{" "}
-                    <span className="text-gray-100 font-medium">
-                      {digest.catBreakdown.length} categories
-                    </span>
-                    , distilling to{" "}
-                    <span className="text-gray-100 font-medium">
-                      {digest.uniqueStories} distinct stories
-                    </span>
-                    .
-                  </p>
-
-                  {/* Category breakdown pills */}
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {digest.catBreakdown.map((cat) => (
-                      <span
-                        key={cat.name}
-                        className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-full"
-                      >
-                        {cat.name}{" "}
-                        <span className="text-gray-500">
-                          {cat.stories}
-                          {cat.stories !== cat.articles &&
-                            ` (${cat.articles} articles)`}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
+      {!loading &&
+        data &&
+        data.total > 0 &&
+        (() => {
+          const digest = buildDigest(data);
+          return (
+            <div className="mb-6">
+              <button
+                onClick={() => setDigestOpen(!digestOpen)}
+                className={`w-full flex items-center justify-between bg-gray-900 border border-gray-800 px-5 py-3 hover:bg-gray-800/70 transition-colors ${
+                  digestOpen ? "rounded-t-lg" : "rounded-lg"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-gray-100">
+                    TLDR
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {digest.totalAnalyzed} reviewed, {digest.totalRelevant}{" "}
+                    relevant, {digest.uniqueStories} stories
+                  </span>
                 </div>
+                <span className="text-gray-500 text-xs">
+                  {digestOpen ? "Hide" : "Show"}
+                </span>
+              </button>
 
-                {/* Top stories */}
-                {digest.topStories.length > 0 && (
-                  <div className="pt-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
-                      Most Covered Stories
-                    </h3>
-                    <div className="space-y-3">
-                      {digest.topStories.map(({ group, category }) => (
-                        <div
-                          key={group.primary.id}
-                          className="flex gap-3 items-start"
+              {digestOpen && (
+                <div className="bg-gray-900 border border-t-0 border-gray-800 rounded-b-lg px-5 pb-5">
+                  {/* Scan summary */}
+                  <div className="pt-4 pb-4 border-b border-gray-800">
+                    <p className="text-sm text-gray-300 leading-relaxed">
+                      Scanned{" "}
+                      <span className="text-gray-100 font-medium">
+                        {digest.totalAnalyzed} articles
+                      </span>{" "}
+                      from{" "}
+                      <span className="text-gray-100 font-medium">
+                        {digest.uniqueSources} sources
+                      </span>
+                      .{" "}
+                      <span className="text-gray-100 font-medium">
+                        {digest.totalRelevant}
+                      </span>{" "}
+                      flagged as relevant across{" "}
+                      <span className="text-gray-100 font-medium">
+                        {digest.catBreakdown.length} categories
+                      </span>
+                      , distilling to{" "}
+                      <span className="text-gray-100 font-medium">
+                        {digest.uniqueStories} distinct stories
+                      </span>
+                      .
+                    </p>
+
+                    {/* Category breakdown pills */}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {digest.catBreakdown.map((cat) => (
+                        <span
+                          key={cat.name}
+                          className="text-xs bg-gray-800 text-gray-400 px-2.5 py-1 rounded-full"
                         >
-                          <span className="text-xs font-medium text-gray-600 bg-gray-800 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
-                            {group.related.length + 1}x
+                          {cat.name}{" "}
+                          <span className="text-gray-500">
+                            {cat.stories}
+                            {cat.stories !== cat.articles &&
+                              ` (${cat.articles} articles)`}
                           </span>
-                          <div className="min-w-0">
-                            <a
-                              href={group.primary.articles.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-gray-200 leading-snug hover:text-blue-400 transition-colors"
-                            >
-                              {group.primary.summary || group.primary.articles.title}
-                            </a>
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {category}
-                            </p>
-                          </div>
-                        </div>
+                        </span>
                       ))}
                     </div>
                   </div>
-                )}
 
-                {/* Single-source stories count */}
-                {digest.uniqueStories - digest.topStories.length > 0 && (
-                  <p className="text-xs text-gray-600 mt-4 pt-3 border-t border-gray-800">
-                    + {digest.uniqueStories - digest.topStories.length}{" "}
-                    single-source stories across all categories
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+                  {/* Top stories */}
+                  {digest.topStories.length > 0 && (
+                    <div className="pt-4">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
+                        Most Covered Stories
+                      </h3>
+                      <div className="space-y-3">
+                        {digest.topStories.map(({ group, category: cat }) => (
+                          <div
+                            key={group.articles[0].id}
+                            className="flex gap-3 items-start"
+                          >
+                            <span className="text-xs font-medium text-gray-600 bg-gray-800 rounded px-1.5 py-0.5 shrink-0 mt-0.5">
+                              {group.clusterArticleCount}x
+                            </span>
+                            <div className="min-w-0">
+                              <span className="text-sm text-gray-200 leading-snug">
+                                {group.clusterHeadline ||
+                                  group.articles[0].summary ||
+                                  group.articles[0].articles.title}
+                              </span>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {cat} &bull;{" "}
+                                {group.articles
+                                  .map((a) => a.articles.source)
+                                  .join(", ")}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Single-source stories count */}
+                  {digest.uniqueStories - digest.topStories.length > 0 && (
+                    <p className="text-xs text-gray-600 mt-4 pt-3 border-t border-gray-800">
+                      + {digest.uniqueStories - digest.topStories.length}{" "}
+                      single-source stories across all categories
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
       {/* Articles list */}
       {!loading && data && data.total > 0 && (
@@ -426,95 +577,48 @@ export default function ArticlesPage() {
           </p>
 
           {Object.entries(data.categories).map(([cat, articles]) => {
-            const grouped = groupByClusters(articles as ArticleData[]);
+            const sorted = sortByInternational(articles as ArticleData[]);
+            const grouped = groupByClusters(sorted, data.clusters || {});
             return (
               <section key={cat}>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 pb-1.5 mb-2">
                   {cat}
                 </h2>
                 <div className="space-y-1">
-                  {grouped.map(({ primary, related }) => (
-                    <div
-                      key={primary.id}
-                      className="bg-gray-900 rounded border border-gray-800 px-3 py-2"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            <a
-                              href={primary.articles.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-medium text-gray-100 hover:text-blue-400 leading-snug"
-                            >
-                              {primary.articles.title}
-                            </a>
-                            <span className="text-xs text-gray-500 shrink-0">
-                              {primary.articles.source}
-                              {primary.articles.source_type === "gnews_api" && (
-                                <span className="ml-1 text-blue-400">API</span>
-                              )}
-                            </span>
-                          </div>
-                          {primary.summary && (
-                            <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">
-                              {primary.summary}
-                            </p>
-                          )}
-                          {related.length > 0 && (
-                            <p className="mt-0.5 text-xs text-gray-600">
-                              Also:{" "}
-                              {related.map((r, i) => (
-                                <span key={r.id}>
-                                  {i > 0 && ", "}
-                                  <a
-                                    href={r.articles.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-blue-400 hover:underline"
-                                  >
-                                    {r.articles.source}
-                                  </a>
-                                </span>
-                              ))}
-                            </p>
-                          )}
+                  {grouped.map((cluster) =>
+                    cluster.clusterHeadline &&
+                    cluster.clusterArticleCount > 1 ? (
+                      <div
+                        key={`cluster-${cluster.articles[0].id}`}
+                        className="border border-gray-700 rounded-lg overflow-hidden"
+                      >
+                        <div className="bg-gray-800/50 px-3 py-1.5 border-b border-gray-700">
+                          <span className="text-xs font-medium text-gray-300">
+                            {cluster.clusterHeadline}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-2">
+                            {cluster.clusterArticleCount} articles
+                          </span>
                         </div>
-                        <div className="flex gap-1 shrink-0 mt-0.5">
-                          <button
-                            onClick={() =>
-                              handleFeedback(primary.article_id, "relevant")
-                            }
-                            className={`w-5 h-5 flex items-center justify-center rounded text-xs font-medium transition-colors ${
-                              feedbackState[primary.article_id] === "relevant"
-                                ? "bg-green-800 text-green-300"
-                                : "text-green-600 bg-gray-800 hover:bg-gray-700"
-                            }`}
-                            title="Relevant"
-                          >
-                            +
-                          </button>
-                          <button
-                            onClick={() =>
-                              handleFeedback(
-                                primary.article_id,
-                                "not_relevant"
-                              )
-                            }
-                            className={`w-5 h-5 flex items-center justify-center rounded text-xs font-medium transition-colors ${
-                              feedbackState[primary.article_id] ===
-                              "not_relevant"
-                                ? "bg-red-800 text-red-300"
-                                : "text-red-600 bg-gray-800 hover:bg-gray-700"
-                            }`}
-                            title="Not relevant"
-                          >
-                            +
-                          </button>
+                        <div className="divide-y divide-gray-800/50">
+                          {cluster.articles.map((article) => (
+                            <div key={article.id} className="px-3 py-2">
+                              {renderArticleCard(article)}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ) : (
+                      cluster.articles.map((article) => (
+                        <div
+                          key={article.id}
+                          className="bg-gray-900 rounded border border-gray-800 px-3 py-2"
+                        >
+                          {renderArticleCard(article)}
+                        </div>
+                      ))
+                    )
+                  )}
                 </div>
               </section>
             );
@@ -524,7 +628,7 @@ export default function ArticlesPage() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-4 right-4 bg-gray-100 text-gray-900 text-sm px-4 py-2 rounded-lg shadow-lg">
+        <div className="fixed bottom-4 right-4 bg-gray-100 text-gray-900 text-sm px-4 py-2 rounded-lg shadow-lg z-50">
           {toast}
         </div>
       )}

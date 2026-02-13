@@ -24,6 +24,7 @@ interface AnalysisResult {
   is_relevant: boolean;
   summary: string | null;
   category: string | null;
+  is_international: boolean;
 }
 
 function truncate(text: string | null, maxChars: number): string {
@@ -50,7 +51,8 @@ Return a JSON array with one object per article, in order. Each object must have
   "index": number,
   "is_relevant": boolean,
   "summary": string or null,
-  "category": string or null
+  "category": string or null,
+  "is_international": boolean
 }
 
 RELEVANCE CRITERIA:
@@ -71,7 +73,7 @@ An article is NOT relevant if it:
 - Is purely cultural coverage (food, holidays, art) with no discrimination angle
 - Is historical content with no current news hook
 
-For NOT relevant articles: set summary and category to null.
+For NOT relevant articles: set summary and category to null and is_international to false.
 
 For relevant articles:
 - summary: 1-2 sentences, neutral factual tone, key newsworthy element
@@ -79,6 +81,7 @@ For relevant articles:
   "Campus & Academia", "Government & Policy", "Hate Crimes & Violence",
   "Media & Public Discourse", "International", "Organizational Response",
   "Legal & Civil Rights", "Other"
+- is_international: true if the article primarily covers events outside the United States. False for US-focused stories, even if they mention international context.
 
 Return ONLY the JSON array, no other text.
 
@@ -144,6 +147,7 @@ async function analyzeBatch(
       is_relevant: result.is_relevant,
       summary: result.summary,
       category: result.category,
+      is_international: result.is_international || false,
       model_used: MODEL,
     });
 

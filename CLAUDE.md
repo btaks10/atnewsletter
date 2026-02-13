@@ -55,11 +55,12 @@ lib/
   supabase.ts                         Supabase client singleton (service role key)
   rss.ts                              RSS feed parsing and ingestion
   gnews.ts                            GNews API queries (200ms rate limit between requests)
+  dedup.ts                            Title-based fuzzy dedup (Jaccard similarity >85% threshold)
   claude.ts                           Claude Sonnet analysis: batches of 20, 50s timeout, 1500 char window
   keyword-filter.ts                   3-tier keyword pre-filter (primary/secondary/context)
   article-extractor.ts                Full text extraction from URLs (<p> tag parsing, max 5000 chars)
   story-clustering.ts                 Claude Haiku clustering: parallel by category, batch DB writes
-  email.ts                            Resend email template builder with cluster merging
+  email.ts                            Resend email template builder with cluster group rendering
   config.ts                           Category order, getActiveFeeds(), getArticleAgeCutoff()
 
 middleware.ts                         Auth middleware (public pipeline endpoints, protected dashboard)
@@ -85,7 +86,7 @@ Analysis runs 3 times because each invocation processes one batch of 20 within t
 
 ### Manual Sync (Dashboard)
 
-The "Sync Now" button calls 3 endpoints sequentially: ingest-articles -> ingest-gnews -> analyze-articles. Each gets its own 60s window. Progress is shown via toast notifications. The full pipeline orchestrator at `/api/trigger-digest` runs all stages including clustering and email.
+The "Sync Now" button calls 4 endpoints sequentially: ingest-articles -> ingest-gnews -> analyze-articles -> cluster-stories. Each gets its own 60s window. Progress is shown via toast notifications. The full pipeline orchestrator at `/api/trigger-digest` runs all stages including clustering and email.
 
 ### Analysis Pipeline Detail
 
@@ -100,9 +101,9 @@ The "Sync Now" button calls 3 endpoints sequentially: ingest-articles -> ingest-
 
 | Table | Purpose |
 |-------|---------|
-| `articles` | Raw ingested articles (url unique, source_type: rss/gnews_api) |
-| `article_analysis` | Claude's relevance analysis (is_relevant, summary, category, cluster_id) |
-| `article_feedback` | User +/- votes (stored but not yet used in pipeline) |
+| `articles` | Raw ingested articles (url unique, source_type: rss/gnews_api, duplicate_of for dedup) |
+| `article_analysis` | Claude's relevance analysis (is_relevant, summary, category, cluster_id, is_international) |
+| `article_feedback` | User +/- votes with reason (not_relevant/duplicate/wrong_category/low_priority) |
 | `story_clusters` | Grouped stories (cluster_headline, article_count, category) |
 | `pipeline_stats` | Run metrics (ingested/relevant counts, duration, email_sent flag) |
 | `ingest_logs` | Per-feed ingestion results (source, status, articles_found/new) |
@@ -155,6 +156,9 @@ Deployed automatically on push to `main` via Vercel.
 - **Dark theme**: All pages use gray-950/900/800 Tailwind classes. No theme toggle.
 - **Toast notifications**: Simple div-based, not a library.
 - **Utility functions**: Defined inline in page files (groupByClusters, buildDigest, timeAgo).
+- **Dedup strategy**: Title-based fuzzy dedup using Jaccard word-overlap similarity (>0.85 threshold). Runs during ingestion for both RSS and GNews. Duplicates stored with `duplicate_of` pointing to original, marked `analyzed: true` to skip pipeline.
+- **Cluster display**: Topic-based grouping — cluster headline with article count header, all articles shown fully inside bordered container. Single-article clusters rendered as standalone cards.
+- **International sorting**: `is_international` boolean on `article_analysis`. INTL articles sort to bottom within each category on both dashboard and email. Amber "INTL" badge on cards.
 
 ## Source Coverage
 
@@ -174,3 +178,6 @@ Deployed automatically on push to `main` via Vercel.
 - **Build output masking**: `npx next build 2>&1 | tail -5` masks exit codes — don't chain with `&&`.
 - **Vercel fire-and-forget**: Unreliable on serverless — always await async operations.
 - **Google News RSS overlap**: Biggest scope win for coverage, but GNews API heavily overlaps with RSS at scale.
+- **Google News RSS source labels**: Title format is "Headline - Publisher". Parsed via `lastIndexOf(" - ")` during RSS ingestion. Without this, source shows as "Google News" instead of the actual publisher.
+- **Manual sync must include clustering**: SYNC_STAGES in dashboard layout must list all 4 stages (RSS, GNews, analyze, cluster). Missing any stage means manual sync skips it.
+- **Clustering threshold**: Minimum 2 articles per category to attempt clustering. Too high a threshold (e.g. 4) causes clusters to never form at daily volumes.

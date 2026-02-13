@@ -156,6 +156,7 @@ export default function ArticlesPage() {
   );
   const [toast, setToast] = useState("");
   const [reasonDropdown, setReasonDropdown] = useState<string | null>(null);
+  const [collapsedCats, setCollapsedCats] = useState<Record<string, boolean>>({});
   const reasonDropdownRef = useRef<string | null>(null);
   reasonDropdownRef.current = reasonDropdown;
 
@@ -579,47 +580,68 @@ export default function ArticlesPage() {
           {Object.entries(data.categories).map(([cat, articles]) => {
             const sorted = sortByInternational(articles as ArticleData[]);
             const grouped = groupByClusters(sorted, data.clusters || {});
+            const isCollapsed = collapsedCats[cat] ?? true;
             return (
               <section key={cat}>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 pb-1.5 mb-2">
-                  {cat}
-                </h2>
-                <div className="space-y-1">
-                  {grouped.map((cluster) =>
-                    cluster.clusterHeadline &&
-                    cluster.clusterArticleCount > 1 ? (
-                      <div
-                        key={`cluster-${cluster.articles[0].id}`}
-                        className="border border-gray-600 rounded-lg overflow-hidden"
-                      >
-                        <div className="bg-gray-800 px-3 py-2 border-b border-gray-600 flex items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-200">
-                            {cluster.clusterHeadline}
-                          </span>
-                          <span className="text-xs text-gray-400 bg-gray-700 px-1.5 py-0.5 rounded">
-                            {cluster.clusterArticleCount}
-                          </span>
-                        </div>
-                        <div className="divide-y divide-gray-800/50">
-                          {cluster.articles.map((article) => (
-                            <div key={article.id} className="px-3 py-2">
-                              {renderArticleCard(article)}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      cluster.articles.map((article) => (
+                <button
+                  onClick={() =>
+                    setCollapsedCats((prev) => ({
+                      ...prev,
+                      [cat]: !isCollapsed,
+                    }))
+                  }
+                  className="w-full flex items-center justify-between border-b border-gray-800 pb-1.5 mb-2 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      {cat}
+                    </h2>
+                    <span className="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded">
+                      {(articles as ArticleData[]).length}
+                    </span>
+                  </div>
+                  <span className="text-gray-600 text-xs group-hover:text-gray-400 transition-colors">
+                    {isCollapsed ? "Show" : "Hide"}
+                  </span>
+                </button>
+                {!isCollapsed && (
+                  <div className="space-y-1">
+                    {grouped.map((cluster) =>
+                      cluster.clusterHeadline &&
+                      cluster.clusterArticleCount > 1 ? (
                         <div
-                          key={article.id}
-                          className="bg-gray-900 rounded border border-gray-800 px-3 py-2"
+                          key={`cluster-${cluster.articles[0].id}`}
+                          className="border border-gray-600 rounded-lg overflow-hidden"
                         >
-                          {renderArticleCard(article)}
+                          <div className="bg-gray-800 px-3 py-2 border-b border-gray-600 flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-200">
+                              {cluster.clusterHeadline}
+                            </span>
+                            <span className="text-xs text-gray-400 bg-gray-700 px-1.5 py-0.5 rounded">
+                              {cluster.clusterArticleCount}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-gray-800/50">
+                            {cluster.articles.map((article) => (
+                              <div key={article.id} className="px-3 py-2">
+                                {renderArticleCard(article)}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                      ))
-                    )
-                  )}
-                </div>
+                      ) : (
+                        cluster.articles.map((article) => (
+                          <div
+                            key={article.id}
+                            className="bg-gray-900 rounded border border-gray-800 px-3 py-2"
+                          >
+                            {renderArticleCard(article)}
+                          </div>
+                        ))
+                      )
+                    )}
+                  </div>
+                )}
               </section>
             );
           })}

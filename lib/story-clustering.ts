@@ -88,7 +88,9 @@ export async function runClustering() {
     )
     .eq("is_relevant", true)
     .is("cluster_id", null)
-    .gte("analyzed_at", cutoff);
+    .gte("analyzed_at", cutoff)
+    .order("analyzed_at", { ascending: false })
+    .limit(50);
 
   if (fetchError) {
     throw new Error(fetchError.message);
@@ -223,6 +225,7 @@ export async function runClustering() {
     articles_clustered: articlesClustered,
     total_relevant: articles.length,
     categories_processed: byCategory.size,
+    has_more: articles.length >= 50,
     ...(errors.length > 0 ? { errors } : {}),
   };
 }

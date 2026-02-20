@@ -186,7 +186,9 @@ export async function runAnalysis() {
     .from("articles")
     .select("*")
     .eq("analyzed", false)
-    .gte("fetched_at", cutoff);
+    .gte("fetched_at", cutoff)
+    .order("fetched_at", { ascending: false })
+    .limit(50);
 
   if (fetchError) {
     throw new Error(fetchError.message);

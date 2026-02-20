@@ -61,28 +61,41 @@ export default function DashboardLayout({
     let totalNew = 0;
     let totalRelevant = 0;
 
+    const MAX_RETRIES = 5;
     const stageErrors: string[] = [];
     for (const stage of SYNC_STAGES) {
       if (abortRef.current) break;
-      setSyncToast(stage.label);
 
-      try {
-        const res = await fetch(stage.url, { method: "POST" });
-        const data = await res.json();
+      let retries = 0;
+      let hasMore = true;
+      while (hasMore && retries < MAX_RETRIES && !abortRef.current) {
+        const passLabel = retries > 0
+          ? `${stage.label} (pass ${retries + 1})`
+          : stage.label;
+        setSyncToast(passLabel);
 
-        if (!res.ok) {
+        try {
+          const res = await fetch(stage.url, { method: "POST" });
+          const data = await res.json();
+
+          if (!res.ok) {
+            stageErrors.push(stage.label);
+            break;
+          }
+
+          // Collect stats from each stage
+          if (data.new_articles_inserted) totalNew += data.new_articles_inserted;
+          if (data.claude_analysis?.articles_relevant) {
+            totalRelevant += data.claude_analysis.articles_relevant;
+          }
+
+          // Retry if there's more work (analysis or clustering backlog)
+          hasMore = !!(data.remaining_unanalyzed > 0 || data.has_more || data.timed_out);
+        } catch {
           stageErrors.push(stage.label);
-          continue; // Continue to next stage instead of aborting
+          break;
         }
-
-        // Collect stats from each stage
-        if (data.new_articles_inserted) totalNew += data.new_articles_inserted;
-        if (data.claude_analysis?.articles_relevant) {
-          totalRelevant += data.claude_analysis.articles_relevant;
-        }
-      } catch {
-        stageErrors.push(stage.label);
-        continue; // Continue to next stage instead of aborting
+        retries++;
       }
     }
 

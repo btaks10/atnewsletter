@@ -8,6 +8,8 @@ const PUBLIC_PATHS = [
   "/api/analyze-articles",
   "/api/send-digest",
   "/api/cluster-stories",
+  "/api/generate-summaries",
+  "/api/backfill",
   "/api/auth",
   "/login",
 ];
